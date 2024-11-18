@@ -1,46 +1,64 @@
+
 import random as r
 import os
 import pygame
 import math
+import copy
 
 
-WIDTH = 6
-m,n = 15, 10
+WIDTH = 8
+m,n = 12, 10
+SPARSITY = 50
+
+WALL_COLOR = (r.randint(0, 255), r.randint(0, 255), r.randint(0, 255))
+FILL_COLOR = (r.randint(0, 255), r.randint(0, 255), r.randint(0, 255))
+ 
 
 class Maze(object):
-    def __init__(self, col, row):
+    def __init__(self, col, row, SPARSITY):
         if row % 2 == 0:
             row += 1
         if col % 2 == 0:
             col += 1
-            
-        print(col, row)
-            
+                   
         self.cols = col
         self.rows = row
-        self.layout = [[Wall(((i + 2) * WIDTH, (j + 2) * WIDTH), (255,255,255)) for i in range(col)] for j in range(row)]
-        # self.start = (math.ceil(self.cols / 2), math.ceil(self.rows / 2))
-        self.start = (3,3)
-        self.carve()
-        self.layout[0][1].delete()
+        self.layout = [[Wall(((i) * WIDTH, (j) * WIDTH), (WALL_COLOR)) for i in range(col)] for j in range(row)]
+        
+        if SPARSITY[0] < 0 and SPARSITY[1] < 0:
+            self.carve(self.layout)
+           
+        else:
+            layout1 = copy.deepcopy(self.layout)
+            self.carve(layout1)
+            self.carve(self.layout)
+            self.combine(self.layout, layout1, SPARSITY)
+
+      
+        self.layout[0][1].kill()
         self.layout[0][1].color = (255, 0, 0)
+    
         
 
+    def combine(self, layout, other, sparsity):
+        for y in range(len(layout)):
+            for x in range(len(layout[y])):
+                if layout[y][x].state != "alive" or "alive" != other[y][x].state and r.randrange(0, 100 ) < sparsity[0]:
+                    layout[y][x].kill()
+                    
 
+                if  r.randrange(0, 100 ) < sparsity[1] and x != 0 and x != len(self.layout[0]) - 1 and y != 0 and y != len(self.layout) - 1 and x % 2 == 0 and y % 2 == 0:
+                    layout[y][x].kill()
     
 
     def getStart(self):
         return self.start
         
 
-    def carve(self):
+    def carve(self, layout):
        
-        
         visited = set()
-        toVisit = [self.start]
-        last = self.start
-        print(last)
-        
+        toVisit = [(3,3)]       
         while len(toVisit) > 0:
             x,y = toVisit[-1]
             choices = []
@@ -55,41 +73,52 @@ class Maze(object):
             
 
             if len(choices) == 0:
-                
-                
-                self.layout[y][x].delete()
+                layout[y][x].kill()
                 visited.add(toVisit.pop())
                 
             else:
                 c1, c2 = r.choice(choices)
                 toVisit.append(c1)
-                self.layout[c2[1] ][c2[0]].delete()
+                layout[c2[1] ][c2[0]].kill()
                
                 visited.add((x, y))
                 
-            last = (x,y)
                 
-                
-    def render(self):
+    def render(self, screen):
             for row in self.layout:
                 for col in row:
-                    if col != None:
+                    try:
                         pygame.draw.rect(screen, col.color, col.rect)
+                    except:
+                        raise ValueError(f"{col.color}")
             
             
-            
+class Pellet(object):
+    
+    def __innit__ (self, x, y, screen):
+        self.screen
+        self.x = x
+        self.y = y
+        self.color = (255, 255, 0)
+        
+    def change_color(self):
+        self.color = (r.randint(0, 255), r.randint(0, 255), r.randint(0, 255))
+
+    def render(self):
+        pygame.draw.circle(self.screen, self.color, self.x, self.y)
+        
 
 
-# Class for the orange dude
 class Player(object):
     
-    def __init__(self):
-        self.rect = pygame.Rect((maze.cols) * WIDTH, WIDTH * (maze.rows), WIDTH // 1, WIDTH // 1)
-
+    def __init__(self, maze):
+        self.rect = pygame.Rect((maze.cols - 2) * WIDTH, WIDTH * (maze.rows - 2), WIDTH // 2, WIDTH // 2)
+        self.color = (255, 200, 0)
         self.state = False
         self.path = []
         self.x = None
         self.y = None
+        self.maze = maze
 
     def move(self, dx, dy):
         
@@ -99,11 +128,8 @@ class Player(object):
             tempx, tempy = dx, dy
             dx = (dx - self.x)  * WIDTH
             dy = (dy - self.y) * WIDTH
-    
-            
             self.x, self.y = tempx, tempy
-           
-          
+
 
         if dx != 0:
             self.move_single_axis(dx, 0)
@@ -116,12 +142,7 @@ class Player(object):
         self.rect.x += dx
         self.rect.y += dy
         
-        # x = self.rect.x // WIDTH
-        # y = self.rect.y // WIDTH
-        # print(x,y)
-
-        # If you collide with a wall, move out based on velocity
-        for row in maze.layout:
+        for row in self.maze.layout:
             for wall in row:
                 if wall != None:
                     
@@ -136,9 +157,13 @@ class Player(object):
                             self.rect.top = wall.rect.bottom
                     
 
+    def change_color(self):
+        self.color = (r.randint(0, 255), r.randint(0, 255), r.randint(0, 255))
+
+
     def trace(self, maze):
-        x = -2 + self.rect.x // WIDTH
-        y = -2 + self.rect.y // WIDTH
+        x = 0 + self.rect.x // WIDTH
+        y = 0 + self.rect.y // WIDTH
         print(x,y)
         
         
@@ -147,18 +172,17 @@ class Player(object):
         paths = [[(x, y)]]
         
         while len(paths) > 0:
-            current = paths.pop(0)
+            print(len(visited))
+            current = paths.pop(-1)
             x,y = current[-1]
-            print(f"Checking {x,y}")
+            # print(f"Checking {x,y}")
             
            
             if x == 1 and y == 0:
                 self.state = True
                 self.path = current
-                print(current)
+                # print(current)
                 self.x, self.y = self.path.pop(0)
-             
-                print(self.x, self.y)
                 return
 
                 
@@ -174,6 +198,11 @@ class Player(object):
                     
                 except IndexError:
                     raise IndexError(f"{x+1}, {y}")
+                
+            if y + 1 < len(maze) and (x, y + 1) not in visited:
+                if maze[y + 1][x].state != "alive":
+
+                    paths.append(current + [(x, y + 1)])
                     
             if x - 1 > -1 and (x - 1, y) not in visited:
                 if maze[y][x - 1].state != "alive":
@@ -184,24 +213,12 @@ class Player(object):
          
                 
             if y - 1 > -1 and (x, y - 1) not in visited:
-                print(maze[y - 1][x].state, x, y- 1 )
+                # print(maze[y - 1][x].state, x, y- 1 )
                 if maze[y - 1][x].state != "alive":
        
                     paths.append(current + [(x, y - 1)])
                     
             
-                    
-            if y + 1 < len(maze) and (x, y + 1) not in visited:
-                if maze[y + 1][x].state != "alive":
-
-                    paths.append(current + [(x, y + 1)])
-                    
-
-                 
- 
-    
-              
-
 # Nice class to hold a wall rect
 class Wall(object):
     
@@ -211,187 +228,88 @@ class Wall(object):
         self.color = color
         self.state = "alive"
 
+    def revive(self):
+        self.color = WALL_COLOR
+        self.state = "alive"
 
-    def delete(self):
-        self.color = (0,0,0)
+    def kill(self):
+        self.color = FILL_COLOR
         self.state = "dead"
 
-# Initialise pygame
-os.environ["SDL_VIDEO_CENTERED"] = "1"
-pygame.init()
 
 
+class GameState:
+    def __init__(self, m, n, WDITH, PADDING, SPARSITY, Wall_color, Fill_color):
 
-clock = pygame.time.Clock()
-walls = [] # List to hold the walls
+        os.environ["SDL_VIDEO_CENTERED"] = "1"
+        pygame.init()
+        pygame.display.set_caption("Get to the red square!")
+        self.clock = pygame.time.Clock()
+        
+        self.width = WIDTH
+        self.sparsity = SPARSITY
+        self.padding = PADDING
+        self.wall_color = Wall_color
+        self.fill_color = Fill_color
 
+        self.maze = Maze(m, n, SPARSITY)
+        self.screen = pygame.display.set_mode((WIDTH * (self.maze.cols) , (self.maze.rows) * WIDTH))
+        self.player = Player(self.maze) 
+        self.end_rect = pygame.Rect(1 * WIDTH, 0 * WIDTH, WIDTH, WIDTH)
+                                    
+        self.running = True
 
+        
 
-# Holds the level layout in a list of strings.
-# level = [
-# "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
-# "W      W                       WWWWWWW",
-# "W         WWWWWW   WWWWW  WWW        W",
-# "W   WWWW       W       WWW WWWWWW WWWW",
-# "W   W        WWWW  WWWWWW  WWWWW  WWWW",
-# "W WWW  WWWW        W   W W  WW      WW",
-# "W   W     W W      WWW W WW WWWW  WWWW",
-# "W   W     W   WWW WWWW W    W WWW WWWW",
-# "W   WWW WWW   W W  WWW WWWWW   WW WWWW",
-# "W     W   W   W W       W           WW",
-# "WWW   W   WWWWW W  WW WWWWWWWWWW WWWWW",
-# "W W      WW        WW      WWW   WWWWW",
-# "W W   WWWW   WWW   WW  WW  WW  W  W WW",
-# "W     W    E   W   WWWWWWW      WW  WW",
-# "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
-# ]
-
-
-
-# Parse the level string above. W = wall, E = exit
-# x = y = 0
-# for row in level:
-#     for col in row:
-#         if col == "W":
-#             Wall((x, y))
-#         if col == "E":
-#             end_rect = pygame.Rect(x, y, WIDTH, WIDTH)
-#         x += WIDTH
-#     y += WIDTH
-#     x = 0
+    def run(self):
+        
+        while self.running:
     
-# Set up the display
-pygame.display.set_caption("Get to the red square!")
+            self.clock.tick(60)
+    
+            for e in pygame.event.get():
+                if e.type == pygame.QUIT:
+                    self.running = False
+                
+                if e.type == pygame.KEYDOWN:
+                    if e.key == pygame.K_ESCAPE:
+                        self.running = False
 
-# screen = pygame.display.set_mode((len(level[0]) * WIDTH, len(level) * WIDTH))
 
+                    if e.key == pygame.K_SPACE:
+                      
+                        self.player.trace(self.maze.layout)
 
-# maze = Maze(m, n)
-# screen = pygame.display.set_mode((WIDTH * (maze.cols + 4) , (4 + maze.rows) * WIDTH))
-# player = Player() # Create the player
-# end_rect = pygame.Rect(3 * WIDTH , 2 * WIDTH, WIDTH, WIDTH)
+                    
+                    if e.key == pygame.K_c:
+                        self.player.change_color()
+    
+        # Move the player if an arrow key is pressed
 
-# print(len(level[0]), len(level))
-
-# for l in range(len(level)):
-#     for i in range(len(level[l])):
-#         if level[l][i] == "E":
-#             print(i, l)
+            key = pygame.key.get_pressed()
+            if key[pygame.K_LEFT]:
+                self.player.move(-2, 0)
+            if key[pygame.K_RIGHT]:
+                self.player.move(2, 0)
+            if key[pygame.K_UP]:
+                self.player.move(0, -2)
+            if key[pygame.K_DOWN]:
+                self.player.move(0, 2)
+        
+            if self.player.rect.colliderect(self.end_rect):
+                self.running = False
+                break
+    
+            self.screen.fill(FILL_COLOR)
             
-# print(len(walls))
-
-# running = True
-# while running:
-    
-#     clock.tick(60)
-    
-#     for e in pygame.event.get():
-#         if e.type == pygame.QUIT:
-#             running = False
-#         if e.type == pygame.KEYDOWN and e.key == pygame.K_ESCAPE:
-#             running = False
-
-#         if e.type == pygame.KEYDOWN:
-#             if e.key == pygame.K_SPACE:
-#                 print("'SPACE' HIT")
-#                 player.trace(maze.layout)
-                
-#             if e.key == pygame.K_a:
-                
-#                 player.move(0,0)
-#                 print(player.rect.x, player.rect.y)
-    
-#     # Move the player if an arrow key is pressed
-
-#     key = pygame.key.get_pressed()
-#     if key[pygame.K_LEFT]:
-#         player.move(-1, 0)
-#     if key[pygame.K_RIGHT]:
-#         player.move(1, 0)
-#     if key[pygame.K_UP]:
-#         player.move(0, -1)
-#     if key[pygame.K_DOWN]:
-#         player.move(0, 1)
+            pygame.draw.rect(self.screen, (255, 0, 0), self.end_rect)
+            self.maze.render(self.screen)
+            pygame.draw.rect(self.screen, self.player.color, self.player.rect)
+            pygame.display.flip()
         
-#     if key[pygame.K_z]:
-#         m.p()
-        
- 
-
-    
-    
-#     # Just added this to make it slightly fun ;)
-#     if player.rect.colliderect(end_rect):
-#         raise SystemExit( "You win!")
-    
-#     # Draw the scene
-#     screen.fill((0, 0, 0))
-#     # for wall in walls:
-#     #     pygame.draw.rect(screen, (255, 255, 255), wall.rect)
-#     pygame.draw.rect(screen, (255, 0, 0), end_rect)
-#     maze.render()
-#     pygame.draw.rect(screen, (255, 200, 0), player.rect)
-#     pygame.display.flip()
-    
-
-for l in range(1,65 // WIDTH):
-    
-    maze = Maze(m * l * 2, l * n)
-    screen = pygame.display.set_mode((WIDTH * (maze.cols + 4) , (4 + maze.rows) * WIDTH))
-    player = Player() # Create the player
-    end_rect = pygame.Rect(3 * WIDTH , 2 * WIDTH, WIDTH, WIDTH)
 
 
-        
-    running = True
-    while running:
-    
-        clock.tick(60)
-    
-        for e in pygame.event.get():
-            if e.type == pygame.QUIT:
-                running = False
-            if e.type == pygame.KEYDOWN and e.key == pygame.K_ESCAPE:
-                running = False
+game = GameState(m * 6, 6 * n, WIDTH, 100, (50, 10), WALL_COLOR, FILL_COLOR)
+game.run()
 
-            if e.type == pygame.KEYDOWN:
-                if e.key == pygame.K_SPACE:
-                    print("'SPACE' HIT")
-                    player.trace(maze.layout)
-                
-                if e.key == pygame.K_a:
-                
-                    player.move(-WIDTH,0)
-                    print(player.rect.x, player.rect.y)
-    
-    # Move the player if an arrow key is pressed
 
-        key = pygame.key.get_pressed()
-        if key[pygame.K_LEFT]:
-            player.move(-2, 0)
-        if key[pygame.K_RIGHT]:
-            player.move(2, 0)
-        if key[pygame.K_UP]:
-            player.move(0, -2)
-        if key[pygame.K_DOWN]:
-            player.move(0, 2)
-        
-        if key[pygame.K_z]:
-            m.p()
-        
- 
-
-    
-    
-        # Just added this to make it slightly fun ;)
-        if player.rect.colliderect(end_rect):
-            running = False
-    
-        # Draw the scene
-        screen.fill((0, 0, 0))
-        # for wall in walls:
-        #     pygame.draw.rect(screen, (255, 255, 255), wall.rect)
-        pygame.draw.rect(screen, (255, 0, 0), end_rect)
-        maze.render()
-        pygame.draw.rect(screen, (255, 200, 0), player.rect)
-        pygame.display.flip()
