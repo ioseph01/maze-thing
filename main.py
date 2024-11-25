@@ -12,6 +12,17 @@ SPARSITY = 50
 
 WALL_COLOR = (r.randint(0, 255), r.randint(0, 255), r.randint(0, 255))
 FILL_COLOR = (r.randint(0, 255), r.randint(0, 255), r.randint(0, 255))
+
+
+def directionCoordMap(val):
+    
+    m = {"north" : (0, 1), "east" : (1, 0), "south" : (0, -1), "west" : (-1, 0)}
+    if val in m:
+        return m[val]
+    
+    for k in m:
+        if m[k] == val:
+            return k
  
 
 class Maze(object):
@@ -119,18 +130,31 @@ class Maze(object):
 
 class Snake(object):
     
-    def __init__(self, screen, segments, color, maze, coords, scale):
+    def __init__(self, screen, segments, color, maze, coords, scale, step):
         self.screen = screen
         self.color = color
         self.coords = coords
         self.maze = maze
-        self.segments = [Entity(self.screen, (coords[0], coords[1]), color, maze, 100, scale) for i in range(segments)]
+        if type(segments) == int:
+            self.segments = [Entity(self.screen, (coords[0], coords[1]), color, maze, r.randint(20, 40), scale, step) for i in range(segments)]
+        elif type(segments) == list:
+            self.segments = segments
         self.move_tick = 0
         self.scale = scale
         self.state = "unravel"
         self.unravel_counter = 0
+        self.step = step
 
     def doSomething(self):
+        if len(self.segments) == 0:
+           self.state = "dead"
+           
+        elif self.state == "dead":
+            return
+        
+        elif self.unravel_counter >= len(self.segments):
+            self.state = "searching"
+        
         
         self.move_tick = (self.move_tick + 1) % 2
 
@@ -139,7 +163,27 @@ class Snake(object):
                 coords = (self.segments[0].rect.x, self.segments[0].rect.y)
             
                 for segment in range(len(self.segments)):
-                    temp = (self.segments[segment].rect.x, self.segments[segment].rect.y) 
+                    
+                    for bullet in game.player.bullets:
+                            if self.segments[segment].rect.colliderect(bullet):
+                                print("SHOT!!!!")
+                                bullet.state = "dead"
+                                
+                                self.segments.remove(self.segments[segment])
+                                if segment != 0 and segment != len(self.segments) - 1:
+                                    
+                                    game.snakes.append(Snake(self.screen, self.segments[segment:], self.color, self.maze, self.coords, self.scale, self.step))
+                                    self.segments = self.segments[:segment]
+
+                                
+                                return
+
+
+                    try:
+                        temp = (self.segments[segment].rect.x, self.segments[segment].rect.y) 
+                    except IndexError:
+                        print(self.segments)
+                        exit
                 
                     if segment == 0:
                         self.segments[segment].doSomething()
@@ -147,32 +191,67 @@ class Snake(object):
                     else:
                         self.segments[segment].rect.x = coords[0]
                         self.segments[segment].rect.y = coords[1]
+                        if self.segments[segment].rect.colliderect(game.player.rect):
+                            print("HIT!!!!")
+                        
                     
                     coords = temp
                     
             else:
+                
+                print(self.unravel_counter)
+
                 coords = (self.segments[0].rect.x, self.segments[0].rect.y)
                 for i in range(0, self.unravel_counter):
-                    temp = (self.segments[i].rect.x, self.segments[i].rect.y) 
+                    
+
+                    for bullet in game.player.bullets:
+                            if self.segments[i].rect.colliderect(bullet):
+                                print("SHOT!!!!")
+                                bullet.state = "dead"
+                                self.segments.remove(self.segments[i])
+                                if i != 0 and i != len(self.segments) - 2:
+                                    
+                                    game.snakes.append(Snake(self.screen, self.segments[i:], self.color, self.maze, self.coords, self.scale, self.step))
+                                    self.segments = self.segments[:i]
+                                    
+
+                                self.unravel_counter += 1
+                                return "Shot"
+
+                    try:
+                        temp = (self.segments[i].rect.x, self.segments[i].rect.y) 
+                        
+                    except IndexError:
+                        print("i: ", i, " len: ", len(self.segments))
                     if i == 0:
                         self.segments[i].doSomething()
                     
                     else:
                         self.segments[i].rect.x = coords[0]
                         self.segments[i].rect.y = coords[1]
+                        if self.segments[i].rect.colliderect(game.player.rect):
+                            print("HIT!!!!")
+                            
+                            
+                        
                     
                     coords = temp
                         
                         
                         
                 self.unravel_counter += 1
-                if self.unravel_counter == len(self.segments) - 1:
+                if self.unravel_counter >= len(self.segments) - 1:
                     self.state = "searching"
                         
                     
+        self.render()
 
  
-            
+ 
+        # Okay, so when it's the head of the snake, it does not check for collisions with bullet whicj is causing the bug; implement a checkbulletcollision method
+
+        # WHAT???/
 
         
         
@@ -182,7 +261,7 @@ class Snake(object):
 
 
 class Entity(object):
-    def __init__(self, screen, coords, color, maze, trace_commitment, scale : float):
+    def __init__(self, screen, coords, color, maze, trace_commitment, scale : float, step):
         self.x, self.y = coords
         self.color = color
         self.screen = screen
@@ -197,6 +276,7 @@ class Entity(object):
         self.target = (self.maze.rows, self.maze.cols)
         self.trace_tick = 0
         self.trace_commitment = trace_commitment / 100
+        self.step = step
         
 
     def get_scatter(self):
@@ -231,15 +311,7 @@ class Entity(object):
                         
 
 
-    def directionMapping(self, given, value):
-        directions = {"north": (0, 1), "east" : (1, 0), "south" : (0, -1), "west" : (-1, 0)}
-        
-        if given == "key":
-            return directions[value]
-        else:
-            for k in directions:
-                if directions[k] == value:
-                    return k
+   
         
 
         
@@ -266,7 +338,9 @@ class Entity(object):
                     self.path = current
                 else:
                     self.path = current[:round(len(current) * self.trace_commitment)]
-                self.x, self.y = self.path.pop(0)
+                
+                if len(self.path) > 0:
+                    self.x, self.y = self.path.pop(0)
                 try:
                     self.target = (current[-1][0], current[-1][1])
                 except IndexError:
@@ -326,27 +400,27 @@ class Entity(object):
             
             if len(self.path) > 0:
               
-                if self.trace_tick == WIDTH - 1:
+                if self.trace_tick == WIDTH // self.step - 1:
                     dx, dy = self.path.pop(0)
+                
                 else:
                     dx, dy = self.path[0]
+                   
+                self.move_single_axis(self.step * (dx - self.x), self.step * (dy - self.y))
                 
-               
-                self.move_single_axis(dx - self.x, dy - self.y)
-                
-                if self.trace_tick == WIDTH - 1:
+                if self.trace_tick == WIDTH // self.step  - 1:
                     self.x, self.y = dx, dy
-                self.trace_tick = (self.trace_tick + 1) % WIDTH
+                self.trace_tick = (self.trace_tick + 1) % (WIDTH // self.step)
                 
             elif abs(self.rect.x - game.player.rect.x) < 120 and abs(self.rect.y - game.player.rect.y) < 120:
                 self.trace(game.player.rect.x // WIDTH, game.player.rect.y // WIDTH)
-                print("TRACKING", self.rect.x, game.player.rect.x, self.rect.y, game.player.rect.y, abs(self.rect.x - game.player.rect.x), abs(self.rect.y - game.player.rect.y))
+                # print("TRACKING", self.rect.x, game.player.rect.x, self.rect.y, game.player.rect.y, abs(self.rect.x - game.player.rect.x), abs(self.rect.y - game.player.rect.y))
             
                 
             else:
                 x, y = self.get_scatter()
                 self.target = (x, y)
-                print(f"SCATTER{x, y}")
+                # print(f"SCATTER{x, y}")
                 self.trace(x, y)
            
                 
@@ -356,13 +430,44 @@ class Entity(object):
 
         
                     
- 
+class Bullet(object):
+    
+    def __init__(self, x, y, direction, screen, maze):
+        self.rect = pygame.Rect(x, y, WIDTH // 1, WIDTH // 1)
+        self.color = (255, 255, 255)
+        self.direction = direction
+        self.state = "alive"
+        self.screen = screen
+        self.color = (0,0,0)
+        self.maze = maze
+        
+
+
+    def doSomething(self):
+        toMove = directionCoordMap(self.direction)
+        self.move_single_axis(toMove[0], toMove[1])
+        pygame.draw.rect(self.screen, self.color, self.rect)
+        
+
+    def move_single_axis(self, dx, dy):
+        
+        # Move the rect
+        self.rect.x += dx
+        self.rect.y += dy
+
+        for j in range(self.rect.y // WIDTH - 1, 2 + self.rect.y // WIDTH):
+            for i in range(self.rect.x // WIDTH - 1, self.rect.x // WIDTH + 2):
+                
+                wall = self.maze.layout[j][i]
+                if self.rect.colliderect(wall.rect) and wall.state == "alive":
+                    self.state = "dead"
+
 
 
 
 class Player(object):
     
-    def __init__(self, maze):
+    def __init__(self, maze, screen):
         self.rect = pygame.Rect((maze.cols - 2) * WIDTH, WIDTH * (maze.rows - 2), WIDTH // 1, WIDTH // 1)
         self.color = (255, 200, 0)
         self.state = False
@@ -370,6 +475,24 @@ class Player(object):
         self.x = None
         self.y = None
         self.maze = maze
+        self.bullets = []
+        self.direction = "north"
+        self.screen = screen
+
+
+    def shoot(self):
+        self.bullets.append(Bullet(self.rect.x, self.rect.y, self.direction, self.screen, self.maze))
+        print(self.direction)
+
+
+    def doSomething(self):
+        pygame.draw.rect(self.screen, self.color, self.rect)
+        for bullet in self.bullets:
+            if bullet.state == "dead":
+                self.bullets.remove(bullet)
+            else:
+                bullet.doSomething()
+
 
     def move(self, dx, dy):
         # Move each axis separately. Note that this checks for collisions both times.
@@ -512,10 +635,13 @@ class GameState:
         self.maze = Maze(m, n, SPARSITY)
         self.maze.create_center()
         self.screen = pygame.display.set_mode((WIDTH * (self.maze.cols) , (self.maze.rows) * WIDTH))
-        self.player = Player(self.maze) 
+        self.player = Player(self.maze, self.screen) 
         self.end_rect = pygame.Rect(1 * WIDTH, 0 * WIDTH, WIDTH, WIDTH)
-        self.entities = [Entity(self.screen, (m * WIDTH // 2, n * WIDTH // 2), (0, 255, 0), self.maze, r.randint(30, 80), 2) for i in range(40)]
-        self.snake = Snake(self.screen, 500, (0, 0, 0), self.maze, (m * WIDTH // 2, n * WIDTH // 2), 1)
+        self.entities = [Entity(self.screen, (m * WIDTH // 2, n * WIDTH // 2), (0, 255, 0), self.maze, r.randint(30, 80), 1, 2) for i in range(1)]
+        self.snakes = [Snake(self.screen, r.randint(2000, 3000), self.entities[0].color, self.maze, (m * WIDTH // 2, n * WIDTH // 2), 1, 4) for i in range(1)]
+        # self.snake = Snake(self.screen, 500, self.entities[0].color, self.maze, (m * WIDTH // 2, n * WIDTH // 2), 2, 4)
+       
+        
                                     
         self.running = True
 
@@ -536,25 +662,37 @@ class GameState:
                         self.running = False
 
 
-                    if e.key == pygame.K_SPACE:
+                    if e.key == pygame.K_t:
                       
                         self.player.trace(self.maze.layout, 0, 1)
 
                     
                     if e.key == pygame.K_c:
                         self.player.change_color()
+                        
+                    if e.key == pygame.K_SPACE:
+                        self.player.shoot()
+                        
+
+                    
     
         # Move the player if an arrow key is pressed
 
             key = pygame.key.get_pressed()
             if key[pygame.K_LEFT]:
                 self.player.move(-2, 0)
+                self.player.direction = "west"
             if key[pygame.K_RIGHT]:
                 self.player.move(2, 0)
+                self.player.direction = "east"
             if key[pygame.K_UP]:
                 self.player.move(0, -2)
+                self.player.direction = "south"
             if key[pygame.K_DOWN]:
                 self.player.move(0, 2)
+                self.player.direction = "north"
+                
+            
         
             if self.player.rect.colliderect(self.end_rect):
                 self.running = False
@@ -564,17 +702,22 @@ class GameState:
             
             pygame.draw.rect(self.screen, (255, 0, 0), self.end_rect)
             self.maze.render(self.screen)
-            pygame.draw.rect(self.screen, self.player.color, self.player.rect)
+            self.player.doSomething()
+            
             for entity in self.entities:
                 entity.doSomething()
+            for snake in self.snakes:
+                if snake.state == "dead":
+                    self.snakes.remove(snake)
+                else:
+                    snake.doSomething()
                 
-            self.snake.doSomething()
-            self.snake.render()
+         
             pygame.display.flip()
         
 
 
-game = GameState(m * 6, 6 * n, WIDTH, 100, (80, 20), WALL_COLOR, FILL_COLOR)
+game = GameState(m * 6, 6 * n, WIDTH, 100, (100, 10), WALL_COLOR, FILL_COLOR)
 game.run()
 
 
