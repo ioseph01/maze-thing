@@ -1,7 +1,6 @@
 
 import random as r
 import os
-from symbol import return_stmt
 import trace
 import pygame
 import math
@@ -34,7 +33,7 @@ class Unit(object):
         self.screen = screen
         self.maze = maze
         self.color = color
-        self.state = ""
+        self.state = state
         self.direction = direction
         self.coords = coords
         self.rect = pygame.Rect(coords[0], coords[1], WIDTH //scale, WIDTH //scale)
@@ -57,8 +56,9 @@ class Unit(object):
 
 class Bullet(Unit):
     
-    def __init__(self, screen, maze, coords, direction):
-        super(Bullet, self).__init__( screen, maze, (0,0,0), coords, "alive", direction, 1)
+    def __init__(self, screen, maze, coords, direction, state):
+        super(Bullet, self).__init__( screen, maze, (0,0,0), coords, state, direction, 1)
+       
         
         
 
@@ -89,7 +89,8 @@ class Snake(Unit):
         self.unravel_counter = 0
         self.step = step
         self.move_tick = 0
-        
+        self.destroy_idx = 0
+
         if type(segments) == list:
             self.segments = segments
         elif type(segments) == int:
@@ -103,10 +104,21 @@ class Snake(Unit):
         
         elif len(self.segments) == 0:
             self.state = "dead"
+            return
             
-        elif self.unravel_counter >= len(self.segments):
+        elif self.state == "dying":
+            self.render()
+            self.segments.pop(self.destroy_idx)
+            if len(self.segments) <= 2:
+                return
+            
+        if self.unravel_counter >= len(self.segments):
             self.unravel_counter = len(self.segments)
-            self.state = "searching"
+            if self.state != "dying":
+                self.state = "searching"
+            
+        
+            
             
         self.render()
         self.move_tick = (self.move_tick + 1) % 2
@@ -116,17 +128,35 @@ class Snake(Unit):
             coords = (self.segments[0].rect.x, self.segments[0].rect.y)
                 
             for i in range(self.unravel_counter):
-                
-                
-                    
+                  
                 for bullet in game.player.bullets:
                     if self.segments[i].bulletDetect(bullet):
+                        
+                        if bullet.state == "powered":
+                            self.segments.remove(self.segments[i])
+                            if i != 0 and i != len(self.segments) - 2:
+                                game.snakes.append(Snake(self.screen, self.maze, self.color, self.coords, "dying", self.scale, self.segments[i:], self.step))
+                                game.snakes[-1].destroy_idx = 0
+                                self.segments = self.segments[:i]
+                                self.destroy_idx = -1
+                            elif i == len(self.segments) - 1:
+                                self.destroy_idx = -1
+                            else:
+                                self.destroy_idx = 0
                             
-                        self.segments.remove(self.segments[i])
-                        if i != 0 and i != len(self.segments) - 2:
-                            game.snakes.append(Snake(self.screen, self.maze, self.color, self.coords, "searching", self.scale, self.segments[i:], self.step))
-                            self.segments = self.segments[:i]
-                        self.unravel_counter += 1
+                          
+                            self.unravel_counter += 1
+                            self.state = "dying"
+                            
+                        else:
+                            self.segments.remove(self.segments[i])
+                            if i != 0 and i != len(self.segments) - 2:
+                                game.snakes.append(Snake(self.screen, self.maze, self.color, self.coords, "searching", self.scale, self.segments[i:], self.step))
+                                self.segments = self.segments[:i]
+                            self.unravel_counter += 1
+                            
+                        
+                        bullet.state = "dead"
                         return
                         
                 temp = (self.segments[i].rect.x, self.segments[i].rect.y)
@@ -139,7 +169,7 @@ class Snake(Unit):
                             
                 coords = temp
         self.unravel_counter += 1
-        if self.unravel_counter >= len(self.segments):
+        if self.unravel_counter >= len(self.segments) and self.state != "dying":
             self.state = "searching"
 
 
@@ -155,8 +185,8 @@ class Player(Unit):
         self.bullets = []
         
 
-    def shoot(self):
-        self.bullets.append(Bullet(self.screen, self.maze, (self.rect.x, self.rect.y), self.direction))
+    def shoot(self, state):
+        self.bullets.append(Bullet(self.screen, self.maze, (self.rect.x, self.rect.y), self.direction, state))
         
 
     def doSomething(self):
@@ -243,7 +273,7 @@ class Entity(Unit):
             
         for bullet in game.player.bullets:
             if self.bulletDetect(bullet):
-                return
+                bullet.state = "dead"
             
         self.tick = (self.tick + 1) % 2
         
@@ -276,7 +306,6 @@ class Entity(Unit):
     def bulletDetect(self, bullet):
         if self.rect.colliderect(bullet.rect):
             print("SHOT!!!!")
-            bullet.state = "dead"
             self.state = "dead"
             return True
         return False
@@ -490,9 +519,9 @@ class GameState:
         self.screen = pygame.display.set_mode((WIDTH * (self.maze.cols) , (self.maze.rows) * WIDTH))
         self.player = Player(self.screen, self.maze) 
         self.end_rect = pygame.Rect(1 * WIDTH, 0 * WIDTH, WIDTH, WIDTH)
-        self.entities = [Entity(self.screen, self.maze, (m * WIDTH // 2, n * WIDTH // 2), (0, 255, 0), r.randint(20, 80), 1, 2) for i in range(20)]
+        self.entities = [Entity(self.screen, self.maze, (m * WIDTH // 2, n * WIDTH // 2), (0, 255, 0), r.randint(20, 80), 1, 2) for i in range(10)]
         
-        self.snakes = [Snake(self.screen, self.maze, (0, 255, 0), (m * WIDTH // 2, n * WIDTH // 2), "unravel", 1, 6, 4) for i in range(10)]
+        self.snakes = [Snake(self.screen, self.maze, (0, 255, 0), (m * WIDTH // 2, n * WIDTH // 2), "unravel", 1, 200, 4) for i in range(10)]
         # self.snake = Snake(self.screen, 500, self.entities[0].color, self.maze, (m * WIDTH // 2, n * WIDTH // 2), 2, 4)
        
         
@@ -517,15 +546,16 @@ class GameState:
 
 
                     if e.key == pygame.K_t:
-                      
                         self.player.trace(self.maze.layout, 0, 1)
-
+                    if e.key == pygame.K_1:
+                        self.player.shoot("alive")
+                    if e.key == pygame.K_2:
+                        self.player.shoot("powered")
                     
                     if e.key == pygame.K_c:
                         self.player.change_color()
                         
-                    if e.key == pygame.K_SPACE:
-                        self.player.shoot()
+        
                         
 
                     
@@ -574,5 +604,5 @@ class GameState:
         
 
 
-game = GameState(m * 6, 6 * n, WIDTH, 100, (40, 0), WALL_COLOR, FILL_COLOR)
+game = GameState(m * 6, 6 * n, WIDTH, 100, (100, 10), WALL_COLOR, FILL_COLOR)
 game.run()
