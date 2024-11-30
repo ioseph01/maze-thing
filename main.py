@@ -1,7 +1,6 @@
 
 import random as r
 import os
-import trace
 import pygame
 import math
 import copy
@@ -11,7 +10,6 @@ WIDTH = 16
 m,n = 6, 6
 SPARSITY = 50
 
-WALL_COLOR = (r.randint(0, 255), r.randint(0, 255), r.randint(0, 255))
 FILL_COLOR = (r.randint(0, 255), r.randint(0, 255), r.randint(0, 255))
 
 
@@ -83,7 +81,7 @@ class Bullet(Unit):
         for j in range(self.rect.y // WIDTH - 1, 2 + self.rect.y // WIDTH):
             for i in range(self.rect.x // WIDTH - 1, self.rect.x // WIDTH + 2):
                 
-                wall = self.maze.layout[j][i]
+                wall = self.maze.layout[j][i][0]
                 if self.rect.colliderect(wall.rect) and wall.state == "alive":
                     self.state = "dead"
                     
@@ -204,8 +202,46 @@ class Player(Unit):
         self.mines = []
         self.stun_tick = 0
         self.fire_tick = 0
+        self.clear_tick = 0
         self.hits = 0
+        self.paths = []
         
+
+    def clear_traps(self):
+        if self.fire_tick != 0:
+            return
+        
+        game.inventory[3] -= 1
+        x,y = self.rect.x // WIDTH, self.rect.y // WIDTH
+        visited = set((x, y))
+        toVisit = [[(x, y)]]
+        print("FINDING")
+        while len(toVisit) > 0:
+            
+            current = toVisit.pop(0)
+            temp = len(toVisit)
+            x, y = current[-1]
+            visited.add((x, y))
+            if len(current) >= 15:
+                visited.add((current[0], current[1]))
+                self.paths.append(current)
+                continue
+            
+            if self.maze.layout[y + 1][x][0].state != "alive" and (x, y + 1) not in visited:
+                toVisit.append(current + [(x, y + 1)])
+            if self.maze.layout[y - 1][x][0].state != "alive" and (x, y - 1) not in visited:
+                toVisit.append(current + [(x, y - 1)])
+            if self.maze.layout[y][x + 1][0].state != "alive" and (x + 1, y) not in visited:
+                toVisit.append(current + [(x + 1, y)])
+            if self.maze.layout[y][x - 1][0].state != "alive" and (x - 1, y) not in visited:
+                toVisit.append(current + [(x - 1, y)])
+            if temp == len(toVisit):
+                self.paths.append(current)
+         
+        self.fire_tick = 30
+        # print(self.paths)
+        
+            
 
 
     def shoot(self, state):
@@ -253,6 +289,22 @@ class Player(Unit):
             
         if self.fire_tick > 0:
             self.fire_tick -= 1
+            
+        if len(self.paths) > 0:
+            
+            if self.clear_tick == 0:
+                for path in self.paths:
+                    if len(path) == 0:
+                        self.paths.remove(path)
+                    else:
+                        x, y = path.pop(0)
+                     
+                        if len(self.maze.layout[y][x]) >= 2:
+                            self.maze.layout[y][x][-1].state = "dead"
+                            self.maze.layout[y][x].pop(-1)
+
+            self.clear_tick = (self.clear_tick + 1) % 2
+        
                 
 
 
@@ -266,7 +318,7 @@ class Player(Unit):
         for j in range(self.rect.y // WIDTH - 1, 2 + self.rect.y // WIDTH):
             for i in range(self.rect.x // WIDTH - 1, self.rect.x // WIDTH + 2):
                 
-                wall = self.maze.layout[j][i]
+                wall = self.maze.layout[j][i][0]
                 if self.rect.colliderect(wall.rect) and wall.state == "alive":
                     if dx > 0: # Moving right; Hit the left side of the wall
                             self.rect.right = wall.rect.left
@@ -309,7 +361,7 @@ class Entity(Unit):
         for j in range(self.rect.y // WIDTH - self.scale, self.scale + 1 + self.rect.y // WIDTH):
             for i in range(self.rect.x // WIDTH - self.scale, self.rect.x // WIDTH + self.scale + 1):
                 
-                wall = self.maze.layout[j][i]
+                wall = self.maze.layout[j][i][0]
                 if self.rect.colliderect(wall.rect) and wall.state == "alive":
                     if dx > 0: # Moving right; Hit the left side of the wall
                         self.rect.right = wall.rect.left
@@ -352,9 +404,9 @@ class Entity(Unit):
                     dx, dy = self.path.pop(0)
                     
                 else:
-                    if r.randint(1, 1000) < self.build_rate and self.trace_tick == 0:
-                 
-                        game.traps.append(Mine((self.rect.x, self.rect.y), WALL_COLOR, 1))
+                    if r.randint(1, 1000) < self.build_rate and self.trace_tick == 0 and len(self.maze.layout[self.rect.y // WIDTH][self.rect.x // WIDTH]) < 2:
+                        game.traps.append(Mine((self.rect.x, self.rect.y), game.wall_color, 1))
+                        self.maze.layout[self.rect.y // WIDTH][self.rect.x // WIDTH].append(game.traps[-1])
                     dx, dy = self.path[0]
                     
                 self.move_single_axis(self.step * (dx - self.coords[0]), self.step * (dy - self.coords[1]))
@@ -420,7 +472,7 @@ class Entity(Unit):
             
             if x + 1 < len(self.maze.layout[0]) and (x + 1, y) not in visited:
             
-                if self.maze.layout[y][x + 1].state != "alive":
+                if self.maze.layout[y][x + 1][0].state != "alive":
                     k = abs(target_x - x - 1) + abs(target_y - y)
                     if k not in toAdd:
                         toAdd[k] = []
@@ -429,14 +481,14 @@ class Entity(Unit):
              
                 
             if y + 1 < len(self.maze.layout) and (x, y + 1) not in visited:
-                if self.maze.layout[y + 1][x].state != "alive":
+                if self.maze.layout[y + 1][x][0].state != "alive":
                     k = abs(target_x - x) + abs(target_y - y - 1)
                     if k not in toAdd:
                         toAdd[k] = []
                     toAdd[k].append((x, y + 1))
                     
             if x - 1 > -1 and (x - 1, y) not in visited:
-                if self.maze.layout[y][x - 1].state != "alive":
+                if self.maze.layout[y][x - 1][0].state != "alive":
                     k = abs(target_x - x + 1) + abs(target_y - y)
                     if k not in toAdd:
                         toAdd[k] = []
@@ -444,7 +496,7 @@ class Entity(Unit):
                           
             if y - 1 > -1 and (x, y - 1) not in visited:
            
-                if self.maze.layout[y - 1][x].state != "alive":
+                if self.maze.layout[y - 1][x][0].state != "alive":
                     k = abs(target_x - x) + abs(target_y - y + 1)
                     if k not in toAdd:
                         toAdd[k] = []
@@ -486,7 +538,7 @@ class Giant(Entity):
             for i in range(self.rect.x // WIDTH - self.scale, self.rect.x // WIDTH + self.scale + 1):
               
                 if i > -1 and i < (len(self.maze.layout[0])) and j < (len(self.maze.layout)) and j > -1:
-                    wall = self.maze.layout[j][i]
+                    wall = self.maze.layout[j][i][0]
                     if self.rect.colliderect(wall.rect) and wall.state == "alive":
                         
                         if i == len(self.maze.layout[0]) - 1:
@@ -524,7 +576,8 @@ class Giant(Entity):
             if self.rect.colliderect(mine.rect) and mine.state != "dead":
                 self.hp -= 1
                 mine.hp -= 1
-                self.scale *= 2
+                self.scale += 1
+                self.rect = pygame.Rect(self.rect.x, self.rect.y , WIDTH * self.scale, WIDTH * self.scale)
         
         if self.hp <= 0:
             self.state = "dead"
@@ -580,10 +633,6 @@ class Wall(object):
         self.color = FILL_COLOR
         
 
-    def revive(self):
-        self.state = "alive"
-        self.color = WALL_COLOR
-        
 
 class Mine(Wall):
     
@@ -601,7 +650,7 @@ class Mine(Wall):
 
 class Maze(object):
     
-    def __init__(self, row, col, sparsity, padding):
+    def __init__(self, row, col, sparsity, padding, WALL_COLOR):
         if row % 2 == 0:
             row += 1
             
@@ -610,7 +659,7 @@ class Maze(object):
             
         self.cols = col
         self.rows = row
-        self.layout = [[Wall((i * WIDTH + padding, padding + j * WIDTH), WALL_COLOR) for i in range(col)] for j in range(row)]
+        self.layout = [[[Wall((i * WIDTH + padding, padding + j * WIDTH), WALL_COLOR)] for i in range(col)] for j in range(row)]
         
         if sparsity[0] <= 0 and sparsity[1] <= 0:
             self.carve(self.layout)
@@ -621,7 +670,7 @@ class Maze(object):
             self.carve(self.layout)
             self.combine(self.layout, temp, sparsity)
             
-        self.layout[0][1].die()
+        self.layout[0][1][0].die()
         self.padding = padding
         
 
@@ -630,12 +679,12 @@ class Maze(object):
       
         for y in range(len(layout)):
             for x in range(len(layout[y])):
-                if layout[y][x].state != "alive" or "alive" != other[y][x].state and r.randint(0, 100) < sparsity[0]:
-                    layout[y][x].die()
+                if layout[y][x][0].state != "alive" or "alive" != other[y][x][0].state and r.randint(0, 100) < sparsity[0]:
+                    layout[y][x][0].die()
                     
 
                 if  r.randint(0, 100 ) < sparsity[1] and x != 0 and x != len(self.layout[0]) - 1 and y != 0 and y != len(self.layout) - 1 and x % 2 == 0 and y % 2 == 0:
-                    layout[y][x].die()
+                    layout[y][x][0].die()
         
 
     def create_center(self):
@@ -647,7 +696,7 @@ class Maze(object):
 
         for j in range(-math.floor(r / 2), math.floor(r / 2) + 1):
             for i in range(-math.floor(r / 2), math.floor(r / 2) + 1):
-                self.layout[y + j][x + i].die()
+                self.layout[y + j][x + i][0].die()
                 
 
     def carve(self, layout):
@@ -669,13 +718,13 @@ class Maze(object):
             
 
             if len(choices) == 0:
-                layout[y][x].die()
+                layout[y][x][0].die()
                 visited.add(toVisit.pop())
                 
             else:
                 c1, c2 = r.choice(choices)
                 toVisit.append(c1)
-                layout[c2[1] ][c2[0]].die()
+                layout[c2[1] ][c2[0]][0].die()
                
                 visited.add((x, y))
                 
@@ -687,54 +736,113 @@ class Maze(object):
     def render(self):
         for row in self.layout:
             for col in row:
-                col.render()
+                col[0].render()
                 
 
-
 class GameState:
-    def __init__(self, m, n, WDITH, PADDING, SPARSITY, Wall_color, Fill_color):
+    def __init__(self, m, n, WDITH, PADDING, SPARSITY, Fill_color):
 
         os.environ["SDL_VIDEO_CENTERED"] = "1"
         pygame.init()
         pygame.display.set_caption("Get to the red square!")
         self.clock = pygame.time.Clock()
+        self.m = m
+        self.n = n
         
         self.width = WIDTH
         self.sparsity = SPARSITY
         self.padding = PADDING
-        self.wall_color = Wall_color
+        self.wall_color = (r.randint(0,255),r.randint(0,255),r.randint(0,255))
         self.fill_color = Fill_color
 
-        self.maze = Maze(m, n, self.sparsity, self.padding)
+        self.maze = Maze(m, n, self.sparsity, self.padding, self.wall_color)
         self.maze.create_center()
         self.screen = pygame.display.set_mode((WIDTH * (self.maze.cols) + 18 * PADDING, 2 * PADDING + (self.maze.rows) * WIDTH))
         self.end_rect = pygame.Rect(1 * WIDTH + PADDING, 0 * WIDTH, WIDTH, WIDTH)
         
-        self.entities = [Entity(self.screen, self.maze, (PADDING + m * WIDTH // 2, PADDING + n * WIDTH // 2), (0, 255, 0), 80, 1, 2, .15) for i in range(10)]
-        for i in range(10):
+        self.entities = [Entity(self.screen, self.maze, (PADDING + m * WIDTH // 2, PADDING + n * WIDTH // 2), (0, 255, 0), 80, 1, 2, .15) for i in range(0)]
+        for i in range(0):
             self.entities.append(Giant(self.screen, self.maze, (PADDING + m * WIDTH // 2, PADDING + n * WIDTH // 2), (0, 255, 0), r.randint(60, 80), 1, 2, 3))
         
-        self.snakes = [Snake(self.screen, self.maze, (0, 255, 0), (PADDING + m * WIDTH // 2, PADDING + n * WIDTH // 2), "unravel", 1, 15, 8) for i in range(10)]
+        self.snakes = [Snake(self.screen, self.maze, (0, 255, 0), (PADDING + m * WIDTH // 2, PADDING + n * WIDTH // 2), "unravel", 1, 15, 8) for i in range(0)]
         self.traps = []
         # self.snake = Snake(self.screen, 500, self.entities[0].color, self.maze, (m * WIDTH // 2, n * WIDTH // 2), 2, 4)
         self.player = Player(self.screen, self.maze, PADDING) 
-        self.inventory = [99, 10, 10] # bullets,powered,mines
+        self.inventory = [99, 5, 5, 99] # bullets,powered,mines,trap-clear
        
         self.font = pygame.font.Font("PressStart2P-Regular.ttf", 15)
         
         self.score = 0
-                         
+        self.state = None
+        self.lives = 100
+        self.level = 0
+        
         self.running = True
-
         
 
+    def calc_snakes(self):
+        if self.level % 5 == 0 and self.level > 6:
+            return r.randint(1, self.level)
+        else:
+            return r.randint(self.level // 5, self.level)
+        
+    def calc_cells(self):
+        return r.randint(self.level, self.level * 3 // 2)
+    
+    def calc_giants(self):
+        if self.level % 3 == 0 and self.level > 4:
+            return r.randint(2, self.level)
+        else:
+            return r.randint(self.level // 3, self.level)
+        
+
+    def start_level(self):
+        
+        
+        while self.lives > 0:
+            temp = copy.deepcopy(self.maze)
+            inv = copy.deepcopy(self.inventory)
+            print(self.level)
+            x = self.run()
+            if x >= 1:
+                self.score += x * self.level
+                self.wall_color = (r.randint(0,255),r.randint(0,255),r.randint(0,255))
+                self.maze = Maze(self.m, self.n, (r.randint(0, 100), r.randint(0, 100)), self.padding, self.wall_color)
+                self.maze.create_center()
+                self.level += 1
+                self.inventory = [i + self.level // 2 if i + self.level // 2 < 99 else 99 for i in self.inventory]
+                print(self.inventory)
+                
+            elif x == 0:
+                self.lives -= 1
+                self.maze = temp
+                self.inventory = inv
+                
+            elif x == -1:
+                break
+                    
+            self.entities = [Entity(self.screen, self.maze, (self.padding + self.m * WIDTH // 2, self.padding + self.n * WIDTH // 2), (0, 255, 0), 80, 1, 2, .25) for i in range(12)]
+            for i in range(self.calc_giants()):
+                self.entities.append(Giant(self.screen, self.maze, (self.padding + self.m * WIDTH // 2, self.padding + self.n * WIDTH // 2), (0, 255, 0), r.randint(60, 80), 1, 2, 3))
+        
+            self.snakes = [Snake(self.screen, self.maze, (0, 255, 0), (self.padding + self.m * WIDTH // 2, self.padding + self.n * WIDTH // 2), "unravel", 1, self.level, 8) for i in range(self.calc_snakes())]
+            self.traps = []
+            # self.snake = Snake(self.screen, 500, self.entities[0].color, self.maze, (m * WIDTH // 2, n * WIDTH // 2), 2, 4)
+            self.player = Player(self.screen, self.maze, self.padding) 
+            
+     
+
+        pygame.quit()
+            
+                
+                
     def run(self):
-        
+        self.running = True
         while self.running:
     
             self.clock.tick(60)
             if self.player.hits >= 25:
-                break
+                return 0
             
             for e in pygame.event.get():
                 if e.type == pygame.QUIT:
@@ -742,7 +850,7 @@ class GameState:
                 
                 if e.type == pygame.KEYDOWN:
                     if e.key == pygame.K_ESCAPE:
-                        self.running = False
+                        return -1
                     if e.key == pygame.K_t:
                         self.player.trace(self.maze.layout, 0, 1)
                     if e.key == pygame.K_1 and self.inventory[0] > 0:
@@ -753,6 +861,9 @@ class GameState:
                         self.player.lay_mine(5)
                     if e.key == pygame.K_c:
                         self.player.change_color()
+                    if e.key == pygame.K_4 and self.inventory[3] > 0:
+                        self.player.clear_traps()
+
                       
     
         # Move the player if an arrow key is pressed
@@ -775,7 +886,7 @@ class GameState:
         
             if self.player.rect.colliderect(self.end_rect):
                 self.running = False
-                break
+                return 30 - self.player.hits
     
             self.screen.fill(FILL_COLOR)
      
@@ -801,7 +912,7 @@ class GameState:
                 else:
                     trap.doSomething()
 
-            text = self.font.render(f"Score: {self.score}", True, (255,255,255))
+            text = self.font.render(f"Score:{self.score}", True, (255,255,255))
             self.screen.blit(text, (WIDTH * (self.maze.cols) + self.padding * 3, 20))
             
             
@@ -815,16 +926,15 @@ class GameState:
             pygame.display.flip()
 
 
-        pygame.quit()
     
 
 if 1:
     FILL_COLOR = (0,0,0)
 
-game = GameState(m * 6, 6 * n, WIDTH, 10, (100, 20), WALL_COLOR, FILL_COLOR)
-game.run()
+game = GameState(m * 6, 6 * n, WIDTH, 10, (100, 100), FILL_COLOR)
+game.start_level()
 
 
-input(f"Result : {game.player.hits} hits by enemies!")
+# input(f"Result : {game.player.hits} hits by enemies!")
 
 #SPLIT GAMESTATE INTO LEVEL MANAGER - to run levels and manage enemies and such, AND GAME MANAGER - to run screen layout font other
