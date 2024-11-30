@@ -1,6 +1,7 @@
 
 import random as r
 import os
+import trace
 import pygame
 import math
 import copy
@@ -105,7 +106,7 @@ class Snake(Unit):
         if type(segments) == list:
             self.segments = segments
         elif type(segments) == int:
-            self.segments = [Entity(self.screen, self.maze, self.coords, self.color, r.randint(20, 40), self.scale, self.step, 0) for i in range(segments)]
+            self.segments = [Entity(self.screen, self.maze, self.coords, self.color, r.randint(60, 90), self.scale, self.step, 0) for i in range(segments)]
             
 
     def doSomething(self):
@@ -709,11 +710,11 @@ class GameState:
         self.screen = pygame.display.set_mode((WIDTH * (self.maze.cols) + 18 * PADDING, 2 * PADDING + (self.maze.rows) * WIDTH))
         self.end_rect = pygame.Rect(1 * WIDTH + PADDING, 0 * WIDTH, WIDTH, WIDTH)
         
-        self.entities = [Entity(self.screen, self.maze, (PADDING + m * WIDTH // 2, PADDING + n * WIDTH // 2), (0, 255, 0), r.randint(20, 80), 1, 2, .15) for i in range(10)]
-        for i in range(8):
-            self.entities.append(Giant(self.screen, self.maze, (PADDING + m * WIDTH // 2, PADDING + n * WIDTH // 2), (0, 255, 0), r.randint(20, 80), 1, 2, 3))
+        self.entities = [Entity(self.screen, self.maze, (PADDING + m * WIDTH // 2, PADDING + n * WIDTH // 2), (0, 255, 0), 80, 1, 2, .15) for i in range(10)]
+        for i in range(10):
+            self.entities.append(Giant(self.screen, self.maze, (PADDING + m * WIDTH // 2, PADDING + n * WIDTH // 2), (0, 255, 0), r.randint(60, 80), 1, 2, 3))
         
-        self.snakes = [Snake(self.screen, self.maze, (0, 255, 0), (PADDING + m * WIDTH // 2, PADDING + n * WIDTH // 2), "unravel", 1, 15, 8) for i in range(8)]
+        self.snakes = [Snake(self.screen, self.maze, (0, 255, 0), (PADDING + m * WIDTH // 2, PADDING + n * WIDTH // 2), "unravel", 1, 15, 8) for i in range(10)]
         self.traps = []
         # self.snake = Snake(self.screen, 500, self.entities[0].color, self.maze, (m * WIDTH // 2, n * WIDTH // 2), 2, 4)
         self.player = Player(self.screen, self.maze, PADDING) 
@@ -732,6 +733,8 @@ class GameState:
         while self.running:
     
             self.clock.tick(60)
+            if self.player.hits >= 25:
+                break
             
             for e in pygame.event.get():
                 if e.type == pygame.QUIT:
@@ -802,11 +805,11 @@ class GameState:
             self.screen.blit(text, (WIDTH * (self.maze.cols) + self.padding * 3, 20))
             
             
-            text = self.font.render(f"xxx B:{self.inventory[0]}", True, (255,255,255))
+            text = self.font.render(f"{100 - 4 * self.player.hits }% O:{self.inventory[0]}", True, (255,255,255))
             self.screen.blit(text, (WIDTH * (self.maze.cols) + self.padding * 3, 70))
             
             
-            text = self.font.render(f"S:{self.inventory[1]} M:{self.inventory[2]}", True, (255,255,255))
+            text = self.font.render(f"*:{self.inventory[1]} #:{self.inventory[2]}", True, (255,255,255))
             self.screen.blit(text, (WIDTH * (self.maze.cols) + self.padding * 3, 120))
 
             pygame.display.flip()
