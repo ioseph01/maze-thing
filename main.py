@@ -14,8 +14,6 @@ FILL_COLOR = (r.randint(0, 255), r.randint(0, 255), r.randint(0, 255))
 
 
 
-
-
 def directionCoordMap(val):
     
     m = {"north" : (0, 1), "east" : (1, 0), "south" : (0, -1), "west" : (-1, 0)}
@@ -105,6 +103,7 @@ class Snake(Unit):
             self.segments = segments
         elif type(segments) == int:
             self.segments = [Entity(self.screen, self.maze, self.coords, self.color, r.randint(60, 90), self.scale, self.step, 0) for i in range(segments)]
+       
             
 
     def doSomething(self):
@@ -130,7 +129,6 @@ class Snake(Unit):
             
         
             
-            
         self.render()
         self.move_tick = (self.move_tick + 1) % 2
       
@@ -145,33 +143,9 @@ class Snake(Unit):
                     return
                   
                 for bullet in game.player.bullets:
-                    if self.segments[i].bulletDetect(bullet):
+                    if self.segments[i].rect.colliderect(bullet.rect):
                         game.score += 1
-                        if bullet.state == "powered":
-                            self.segments.remove(self.segments[i])
-                            if i != 0 and i != len(self.segments) - 2:
-                                game.snakes.append(Snake(self.screen, self.maze, self.color, self.coords, "dying", self.scale, self.segments[i:], self.step))
-                                game.snakes[-1].destroy_idx = 0
-                                self.segments = self.segments[:i]
-                                self.destroy_idx = -1
-                            elif i == len(self.segments) - 1:
-                                self.destroy_idx = -1
-                            else:
-                                self.destroy_idx = 0
-                            
-                          
-                            self.unravel_counter += 1
-                            self.state = "dying"
-                            
-                        else:
-                            self.segments.remove(self.segments[i])
-                            if i != 0 and i != len(self.segments) - 2:
-                                game.snakes.append(Snake(self.screen, self.maze, self.color, self.coords, "searching", self.scale, self.segments[i:], self.step))
-                                self.segments = self.segments[:i]
-                            self.unravel_counter += 1
-                            
-                        
-                        bullet.state = "dead"
+                        self.bulletCollision(bullet, i)
                         return
                         
                 temp = (self.segments[i].rect.x, self.segments[i].rect.y)
@@ -188,6 +162,31 @@ class Snake(Unit):
         if self.unravel_counter >= len(self.segments) and self.state != "dying":
             self.state = "searching"
 
+
+    def bulletCollision(self, bullet, i):
+        self.segments.remove(self.segments[i])
+        
+        if i > 0 and i < len(self.segments) - 1:
+            if bullet.state == "powered":
+                state = "dying"
+                self.state = state
+                self.destroy_idx = -1
+            else:
+                state = "searching"
+            
+            game.snakes.append(Snake(self.screen, self.maze, self.color, (WIDTH * self.rect.x // WIDTH, WIDTH * self.rect.y // WIDTH), state, self.scale, self.segments[i:], self.step))
+            self.segments = self.segments[:i]
+            self.unravel_counter += 1
+            
+        elif bullet.state == "powered":
+            self.state = "dying"
+            if i >= len(self.segments):
+                self.destroy_idx = -1
+            elif i == 0:
+                self.destroy_idx = 0
+            
+        bullet.state = "dead"
+       
 
     def render(self):
         for i in self.segments:
@@ -376,46 +375,58 @@ class Entity(Unit):
                         self.rect.top = wall.rect.bottom
                         
 
+    def mineDetect(self):
+        for mine in game.player.mines:
+            if self.rect.colliderect(mine.rect) and mine.state != "dead":
+                mine.hp -= 1
+                self.state = "dead"
+    
+    
+    def bulletDetect(self):
+        for bullet in game.player.bullets:
+            if self.rect.colliderect(bullet.rect):
+                print("SHOT!!!!")
+                self.state = "dead"
+                bullet.state = "dead"
+        
+                
+    def lay_trap(self):
+            if r.randint(1, 1000) < self.build_rate and self.trace_tick == 0 and len(self.maze.layout[self.rect.y // WIDTH][self.rect.x // WIDTH]) < 2:
+                game.traps.append(Mine((self.rect.x, self.rect.y), game.wall_color, 1))
+                self.maze.layout[self.rect.y // WIDTH][self.rect.x // WIDTH].append(game.traps[-1])
+        
+
+    def move_path(self):
+        if self.trace_tick == WIDTH // self.step - 1:
+            dx, dy = self.path.pop(0)
+                    
+        else:
+            dx, dy = self.path[0]
+                    
+        self.move_single_axis(self.step * (dx - self.coords[0]), self.step * (dy - self.coords[1]))
+                
+        if self.trace_tick == WIDTH // self.step - 1:
+            self.coords = (dx, dy)
+                    
+        self.trace_tick = (self.trace_tick + 1) % (WIDTH // self.step)
+                
+
 
     def doSomething(self):
+       
         self.render()
-
+        
         if self.rect.colliderect(game.player.rect):
             print("HIT!!!!!!!")
             game.player.hits += 1
             
-        for bullet in game.player.bullets:
-            if self.bulletDetect(bullet):
-                bullet.state = "dead"
-                
-        for mine in game.player.mines:
-            if self.rect.colliderect(mine.rect) and mine.state != "dead":
-                self.state = "dead"
-                mine.hp -= 1
-                
-            
-        self.tick = (self.tick + 1) % 2
-        
+        self.bulletDetect()
+        self.mineDetect()
+      
         if self.tick == 0:
 
-
             if len(self.path) > 0:
-                if self.trace_tick == WIDTH // self.step - 1:
-                    dx, dy = self.path.pop(0)
-                    
-                else:
-                    if r.randint(1, 1000) < self.build_rate and self.trace_tick == 0 and len(self.maze.layout[self.rect.y // WIDTH][self.rect.x // WIDTH]) < 2:
-                        game.traps.append(Mine((self.rect.x, self.rect.y), game.wall_color, 1))
-                        self.maze.layout[self.rect.y // WIDTH][self.rect.x // WIDTH].append(game.traps[-1])
-                    dx, dy = self.path[0]
-                    
-                self.move_single_axis(self.step * (dx - self.coords[0]), self.step * (dy - self.coords[1]))
-                
-                if self.trace_tick == WIDTH // self.step - 1:
-                    self.coords = (dx, dy)
-                    
-                self.trace_tick = (self.trace_tick + 1) % (WIDTH // self.step)
-                
+                self.move_path()
 
             elif abs(self.rect.x - game.player.rect.x) < 120 and abs(self.rect.y - game.player.rect.y) < 120:
                 self.trace(game.player.rect.x // WIDTH, game.player.rect.y // WIDTH)
@@ -425,14 +436,8 @@ class Entity(Unit):
                 self.target = (x, y)
                 self.trace(x, y)
                 
-
-
-    def bulletDetect(self, bullet):
-        if self.rect.colliderect(bullet.rect):
-            print("SHOT!!!!")
-            self.state = "dead"
-            return True
-        return False
+        self.tick = (self.tick + 1) % 2
+        
     
 
     def trace(self, target_x, target_y):
@@ -478,8 +483,6 @@ class Entity(Unit):
                         toAdd[k] = []
                     toAdd[k].append((x + 1, y))
                      
-             
-                
             if y + 1 < len(self.maze.layout) and (x, y + 1) not in visited:
                 if self.maze.layout[y + 1][x][0].state != "alive":
                     k = abs(target_x - x) + abs(target_y - y - 1)
@@ -516,19 +519,30 @@ class Giant(Entity):
         self.hp = hp
 
         
-    def bulletDetect(self, bullet):
-        if self.rect.colliderect(bullet.rect):
+    def bulletDetect(self):
+        for bullet in game.player.bullets:
             
-            print("Giant SHOT!!!!")
-            self.step *= 6/5
-            self.hp -= 1
-            self.scale += 1
-            self.rect = pygame.Rect(self.rect.x, self.rect.y , WIDTH * self.scale, WIDTH * self.scale)
-            return True
-        return False
-    
-       
+            if self.rect.colliderect(bullet.rect):
+                bullet.state = "dead"
+                print("Giant SHOT!!!!")
+                self.step *= 7/5
+                self.hp -= 1
+                self.scale += 1
+                self.rect = pygame.Rect(self.rect.x, self.rect.y , WIDTH * self.scale, WIDTH * self.scale)
+                return
+                
 
+    def mineDetect(self):
+        for mine in game.player.mines:
+            if self.rect.colliderect(mine.rect):
+                self.hp -= 1
+                mine.hp -= 1
+                self.scale += 1
+                self.rect = pygame.Rect(self.rect.x, self.rect.y , WIDTH * self.scale, WIDTH * self.scale)
+                return
+     
+    
+ 
     def move_single_axis(self, dx, dy):
         self.rect.x += dx
         self.rect.y += dy
@@ -544,7 +558,6 @@ class Giant(Entity):
                         if i == len(self.maze.layout[0]) - 1:
                             self.rect.right = wall.rect.left
                       
-                        
                         elif i == 0:
                             self.rect.left = wall.rect.right
               
@@ -559,60 +572,68 @@ class Giant(Entity):
 
         
     def doSomething(self):
-        
         if self.hp <= 0:
             self.state = "dead"
             return
-               
-        if self.rect.colliderect(game.player.rect):
-            print("HIT!!!")
-            game.player.hits += 1
+        else:
+            super().doSomething()
+        
+        
+
+class Builder(Entity):
+    
+    def doSomething(self):
+        
+        if self.state != "dead":
+            self.lay_trap()
+            super().doSomething()
             
-        for bullet in game.player.bullets:
-            if self.bulletDetect(bullet):
-                bullet.state = "dead"
-                
-        for mine in game.player.mines:
-            if self.rect.colliderect(mine.rect) and mine.state != "dead":
-                self.hp -= 1
-                mine.hp -= 1
-                self.scale += 1
-                self.rect = pygame.Rect(self.rect.x, self.rect.y , WIDTH * self.scale, WIDTH * self.scale)
-        
-        if self.hp <= 0:
+
+class Stalker(Giant):
+    
+    def __init__(self, screen, maze, coords, color, trace_commitment, scale, step, hp):
+        super(Stalker, self).__init__(screen, maze, coords, color, trace_commitment, scale, step, hp)
+        self.hide_tick = 0
+   
+    def bulletDetect(self):
+        if self.hp == 0:
             self.state = "dead"
-            return
-                
-        self.render()
-        self.tick = (self.tick + 1) % 2
+        else:
+            for bullet in game.player.bullets:
+                if self.rect.colliderect(bullet.rect):
+                    self.hp -= 1
+                    bullet.state = "dead"
+                    return
+
+    
+    def doSomething(self):
         
-        if self.tick == 0:
-            if len(self.path) > 0:
-                if self.trace_tick == WIDTH // self.step - 1:
-                    dx, dy = self.path.pop(0)
-                    
+        if self.state != "dead":
+            if abs(self.rect.x - game.player.rect.x) < 100 and abs(self.rect.y - game.player.rect.y) < 100 and self.hide_tick == 0:
+                if self.state != "hiding":
+                    self.color = game.wall_color
+                    self.state = "hiding"
+                    print(self.rect.x, self.rect.y)
                 else:
-                    # if r.randint(0, 1000) > 995 and self.trace_tick == 0:
-                    #     game.traps.append(Mine((self.rect.x, self.rect.y), WALL_COLOR, 1))
-                    #     print(self.rect.x, self.rect.y)
-                    dx, dy = self.path[0]
+                    self.bulletDetect()
+                    self.render()
+                    self.hide_tick = self.hide_tick - 1 if self.hide_tick > 0 else 0
+                    if self.rect.colliderect(game.player.rect):
+                        print("HIT!!!!!!!")
+                        game.player.hits += 1
+                        self.color = (0,255,0)
+                        self.state = "alive"
+                        self.hide_tick = 30    
                     
-                self.move_single_axis(self.step * (dx - self.coords[0]), self.step * (dy - self.coords[1]))
-                
-                if self.trace_tick == WIDTH // self.step - 1:
-                    self.coords = (dx, dy)
                     
-                self.trace_tick = (self.trace_tick + 1) % (WIDTH // self.step)
-                
-
-            elif abs(self.rect.x - game.player.rect.x) < 120 and abs(self.rect.y - game.player.rect.y) < 120:
-                self.trace(game.player.rect.x // WIDTH, game.player.rect.y // WIDTH)
-                
             else:
-                x, y = self.get_scatter()
-                self.target = (x, y)
-                self.trace(x, y)
-
+                self.color = (0, 255, 0)
+                self.state = "alive"
+                super().doSomething()
+                self.hide_tick = self.hide_tick - 1 if self.hide_tick > 0 else 0
+                
+                
+                
 
 
 class Wall(object):
@@ -760,11 +781,11 @@ class GameState:
         self.screen = pygame.display.set_mode((WIDTH * (self.maze.cols) + 18 * PADDING, 2 * PADDING + (self.maze.rows) * WIDTH))
         self.end_rect = pygame.Rect(1 * WIDTH + PADDING, 0 * WIDTH, WIDTH, WIDTH)
         
-        self.entities = [Entity(self.screen, self.maze, (PADDING + m * WIDTH // 2, PADDING + n * WIDTH // 2), (0, 255, 0), 80, 1, 2, .15) for i in range(0)]
+        self.entities = [Stalker(self.screen, self.maze, (PADDING + m * WIDTH // 2, PADDING + n * WIDTH // 2), (0, 255, 0), 20, 1, 2, 2) for i in range(1)]
         for i in range(0):
-            self.entities.append(Giant(self.screen, self.maze, (PADDING + m * WIDTH // 2, PADDING + n * WIDTH // 2), (0, 255, 0), r.randint(60, 80), 1, 2, 3))
+            self.entities.append(Giant(self.screen, self.maze, (PADDING + m * WIDTH // 2, PADDING + n * WIDTH // 2), (0, 255, 0), r.randint(60,80), 1, 2, 3))
         
-        self.snakes = [Snake(self.screen, self.maze, (0, 255, 0), (PADDING + m * WIDTH // 2, PADDING + n * WIDTH // 2), "unravel", 1, 15, 8) for i in range(0)]
+        self.snakes = [Snake(self.screen, self.maze, (0, 255, 0), (PADDING + m * WIDTH // 2, PADDING + n * WIDTH // 2), "unravel", 1, 100, 8) for i in range(0)]
         self.traps = []
         # self.snake = Snake(self.screen, 500, self.entities[0].color, self.maze, (m * WIDTH // 2, n * WIDTH // 2), 2, 4)
         self.player = Player(self.screen, self.maze, PADDING) 
@@ -805,7 +826,7 @@ class GameState:
             print(self.level)
             x = self.run()
             if x >= 1:
-                self.score += x * self.level
+                self.score += x // 2 * self.level
                 self.wall_color = (r.randint(0,255),r.randint(0,255),r.randint(0,255))
                 self.maze = Maze(self.m, self.n, (r.randint(0, 100), r.randint(0, 100)), self.padding, self.wall_color)
                 self.maze.create_center()
@@ -821,9 +842,11 @@ class GameState:
             elif x == -1:
                 break
                     
-            self.entities = [Entity(self.screen, self.maze, (self.padding + self.m * WIDTH // 2, self.padding + self.n * WIDTH // 2), (0, 255, 0), 80, 1, 2, .25) for i in range(12)]
+            self.entities = [Builder(self.screen, self.maze, (self.padding + self.m * WIDTH // 2, self.padding + self.n * WIDTH // 2), (0, 255, 0), 80, 1, 2, .25) for i in range(self.calc_cells())]
             for i in range(self.calc_giants()):
                 self.entities.append(Giant(self.screen, self.maze, (self.padding + self.m * WIDTH // 2, self.padding + self.n * WIDTH // 2), (0, 255, 0), r.randint(60, 80), 1, 2, 3))
+            for i in range(3 * self.level // 2):
+                self.entities.append(Stalker(self.screen, self.maze, (self.padding + self.m * WIDTH // 2, self.padding + self.n * WIDTH // 2), (0, 255, 0), 20, 1, 2, 2))
         
             self.snakes = [Snake(self.screen, self.maze, (0, 255, 0), (self.padding + self.m * WIDTH // 2, self.padding + self.n * WIDTH // 2), "unravel", 1, self.level, 8) for i in range(self.calc_snakes())]
             self.traps = []
