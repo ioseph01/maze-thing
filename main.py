@@ -1,315 +1,389 @@
-
-import random as r
-import os
 import pygame
-import math
-import copy
+from units import *
+from structures import *
+
+import os
+import random as r
+
+WIDTH = 16
 
 
-WIDTH = 8
-m,n = 12, 10
-SPARSITY = 50
 
-WALL_COLOR = (r.randint(0, 255), r.randint(0, 255), r.randint(0, 255))
-FILL_COLOR = (r.randint(0, 255), r.randint(0, 255), r.randint(0, 255))
- 
 
-class Maze(object):
-    def __init__(self, col, row, SPARSITY):
-        if row % 2 == 0:
-            row += 1
-        if col % 2 == 0:
-            col += 1
-                   
-        self.cols = col
-        self.rows = row
-        self.layout = [[Wall(((i) * WIDTH, (j) * WIDTH), (WALL_COLOR)) for i in range(col)] for j in range(row)]
+
+
+class SoundControl:
+    
+    def __init__(self):
+        pygame.mixer.init()
+        self.toPlay = []
+        self.play_tick = 0
         
-        if SPARSITY[0] < 0 and SPARSITY[1] < 0:
-            self.carve(self.layout)
-           
-        else:
-            layout1 = copy.deepcopy(self.layout)
-            self.carve(layout1)
-            self.carve(self.layout)
-            self.combine(self.layout, layout1, SPARSITY)
 
+    def play_sounds(self):
       
-        self.layout[0][1].kill()
-        self.layout[0][1].color = (255, 0, 0)
-    
+        if self.play_tick == 0:
+            sounds = self.toPlay
+            for s in sounds:
+                print(s)
+                if s == "boom.mp3":
+                    pygame.mixer.music.load(s)
+                    pygame.mixer.music.play()
+                else:
+                    pygame.mixer.Sound(s).play()
+
+            self.toPlay = []
+        self.play_tick = (self.play_tick + 1) % 10
+
+
+    def load_sound(self, file):
+        if file not in self.toPlay:
+            self.toPlay.append(file)
         
 
-    def combine(self, layout, other, sparsity):
-        for y in range(len(layout)):
-            for x in range(len(layout[y])):
-                if layout[y][x].state != "alive" or "alive" != other[y][x].state and r.randrange(0, 100 ) < sparsity[0]:
-                    layout[y][x].kill()
-                    
-
-                if  r.randrange(0, 100 ) < sparsity[1] and x != 0 and x != len(self.layout[0]) - 1 and y != 0 and y != len(self.layout) - 1 and x % 2 == 0 and y % 2 == 0:
-                    layout[y][x].kill()
-    
-
-    def getStart(self):
-        return self.start
+    def player_death(self):
+        self.load_sound("oof.mp3")
         
 
-    def carve(self, layout):
-       
-        visited = set()
-        toVisit = [(3,3)]       
-        while len(toVisit) > 0:
-            x,y = toVisit[-1]
-            choices = []
-            if x + 2 < self.cols and (x + 2, y) not in visited:
-                choices.append([(x+2, y), (x+1,y)])
-            if x - 2 > -1 and (x - 2, y) not in visited:
-                choices.append([(x-2, y), (x-1,y)])
-            if y + 2 < self.rows  and (x, y + 2) not in visited:
-                choices.append([(x, y + 2), (x, y + 1)])
-            if y - 2 > -1 and (x, y - 2) not in visited:
-                choices.append([(x, y - 2), (x, y - 1)])
-            
-
-            if len(choices) == 0:
-                layout[y][x].kill()
-                visited.add(toVisit.pop())
-                
-            else:
-                c1, c2 = r.choice(choices)
-                toVisit.append(c1)
-                layout[c2[1] ][c2[0]].kill()
-               
-                visited.add((x, y))
-                
-                
-    def render(self, screen):
-            for row in self.layout:
-                for col in row:
-                    try:
-                        pygame.draw.rect(screen, col.color, col.rect)
-                    except:
-                        raise ValueError(f"{col.color}")
-            
-            
-class Pellet(object):
-    
-    def __innit__ (self, x, y, screen):
-        self.screen
-        self.x = x
-        self.y = y
-        self.color = (255, 255, 0)
+    def enemy_death(self):
+        self.load_sound("hit.mp3")
         
-    def change_color(self):
-        self.color = (r.randint(0, 255), r.randint(0, 255), r.randint(0, 255))
 
+    def player_shoot(self):
+        self.load_sound("quack.mp3")
+        
+
+    def player_hurt(self):
+        self.load_sound("damage.mp3")
+
+
+class ScoreBoard:
+    
+    def __init__(self, game):
+        self.screen = game.screen
+        self.font = pygame.font.Font("PressStart2P-Regular.ttf", 15)
+        self.game = game
+        
+        
+        
     def render(self):
-        pygame.draw.circle(self.screen, self.color, self.x, self.y)
+        score = self.font.render(f"{int(self.game.score)}", True, (255,255,255))
+        self.screen.blit(score, (WIDTH * (self.game.maze.cols) + self.game.padding * 2, 20))
         
-
-
-class Player(object):
-    
-    def __init__(self, maze):
-        self.rect = pygame.Rect((maze.cols - 2) * WIDTH, WIDTH * (maze.rows - 2), WIDTH // 2, WIDTH // 2)
-        self.color = (255, 200, 0)
-        self.state = False
-        self.path = []
-        self.x = None
-        self.y = None
-        self.maze = maze
-
-    def move(self, dx, dy):
+        health = self.font.render(f"{int(4 * self.game.player.hp) }%", True, (255,255,255))
+        self.screen.blit(health, (WIDTH * (self.game.maze.cols) + self.game.padding * 11, 20))
         
-        # Move each axis separately. Note that this checks for collisions both times.
-        if self.state and len(self.path) > 0:
-            dx, dy = self.path.pop(0)
-            tempx, tempy = dx, dy
-            dx = (dx - self.x)  * WIDTH
-            dy = (dy - self.y) * WIDTH
-            self.x, self.y = tempx, tempy
+        invMap = [self.ammo1, self.ammo2, self.mine, self.area_clear]
 
-
-        if dx != 0:
-            self.move_single_axis(dx, 0)
-        if dy != 0:
-            self.move_single_axis(0, dy)
-   
-    def move_single_axis(self, dx, dy):
-        
-        # Move the rect
-        self.rect.x += dx
-        self.rect.y += dy
-        
-        for row in self.maze.layout:
-            for wall in row:
-                if wall != None:
-                    
-                    if self.rect.colliderect(wall.rect) and wall.state == "alive":
-                        if dx > 0: # Moving right; Hit the left side of the wall
-                            self.rect.right = wall.rect.left
-                        if dx < 0: # Moving left; Hit the right side of the wall
-                            self.rect.left = wall.rect.right
-                        if dy > 0: # Moving down; Hit the top side of the wall
-                            self.rect.bottom = wall.rect.top
-                        if dy < 0: # Moving up; Hit the bottom side of the wall
-                            self.rect.top = wall.rect.bottom
-                    
-
-    def change_color(self):
-        self.color = (r.randint(0, 255), r.randint(0, 255), r.randint(0, 255))
-
-
-    def trace(self, maze):
-        x = 0 + self.rect.x // WIDTH
-        y = 0 + self.rect.y // WIDTH
-        print(x,y)
-        
-        
-        
-        visited = {(x,y)}
-        paths = [[(x, y)]]
-        
-        while len(paths) > 0:
-            print(len(visited))
-            current = paths.pop(-1)
-            x,y = current[-1]
-            # print(f"Checking {x,y}")
+        for item in range(len(self.game.inventory)):
+            text = str(self.game.inventory[item])
+            if self.game.inventory[item] < 10:
+                text = "0" + text
+            invMap[item](text)
             
-           
-            if x == 1 and y == 0:
-                self.state = True
-                self.path = current
-                # print(current)
-                self.x, self.y = self.path.pop(0)
-                return
+            
+        
 
+    def ammo1(self, text):
+        ammo1 = self.font.render(f"O:{text}", True, (255,255,255))
+        self.screen.blit(ammo1, (WIDTH * (self.game.maze.cols) + self.game.padding * 2, 70))
+        
+    def ammo2(self, text):
+        ammo2 = self.font.render(f"*:{text}", True, (255,255,255))
+        self.screen.blit(ammo2, (WIDTH * (self.game.maze.cols) + self.game.padding * 11, 70))
+        
+    def mine(self, text):
+        mine = self.font.render(f"#:{text}", True, (255,255,255))
+        self.screen.blit(mine, (WIDTH * (self.game.maze.cols) + self.game.padding * 2, 120))
                 
-            
-            visited.add((x, y))
-            
-            if x + 1 < len(maze[0]) and (x + 1, y) not in visited:
-            
-                try:
-                    if maze[y][x + 1].state != "alive":
-                        paths.append(current + [(x + 1, y)])
-                   
-                    
-                except IndexError:
-                    raise IndexError(f"{x+1}, {y}")
-                
-            if y + 1 < len(maze) and (x, y + 1) not in visited:
-                if maze[y + 1][x].state != "alive":
-
-                    paths.append(current + [(x, y + 1)])
-                    
-            if x - 1 > -1 and (x - 1, y) not in visited:
-                if maze[y][x - 1].state != "alive":
-              
-                    paths.append(current + [(x - 1, y)])
-                   
-                   
-         
-                
-            if y - 1 > -1 and (x, y - 1) not in visited:
-                # print(maze[y - 1][x].state, x, y- 1 )
-                if maze[y - 1][x].state != "alive":
-       
-                    paths.append(current + [(x, y - 1)])
-                    
-            
-# Nice class to hold a wall rect
-class Wall(object):
-    
-    def __init__(self, pos, color):
-        # walls.append(self)
-        self.rect = pygame.Rect(pos[0], pos[1], WIDTH, WIDTH)
-        self.color = color
-        self.state = "alive"
-
-    def revive(self):
-        self.color = WALL_COLOR
-        self.state = "alive"
-
-    def kill(self):
-        self.color = FILL_COLOR
-        self.state = "dead"
+    def area_clear(self, text):
+        clear = self.font.render(f"@:{text}", True, (255,255,255))
+        self.screen.blit(clear, (WIDTH * (self.game.maze.cols) + self.game.padding * 11, 120))
 
 
 
 class GameState:
-    def __init__(self, m, n, WDITH, PADDING, SPARSITY, Wall_color, Fill_color):
+    def __init__(self, m, n, WDITH, PADDING, SPARSITY, Fill_color):
+
 
         os.environ["SDL_VIDEO_CENTERED"] = "1"
         pygame.init()
-        pygame.display.set_caption("Get to the red square!")
+        self.sound = SoundControl()
         self.clock = pygame.time.Clock()
         
+        self.m = m
+        self.n = n
+
+        file = open('CourtYard_Settings.txt') 
+        self.content = file.readlines() 
+        file = open('level_settings.txt')
+        self.level_settings = file.readlines()
+        
+        self.level = 0
         self.width = WIDTH
         self.sparsity = SPARSITY
         self.padding = PADDING
-        self.wall_color = Wall_color
+        self.wall_color = (r.randint(0,255),r.randint(0,255),r.randint(0,255))
         self.fill_color = Fill_color
 
-        self.maze = Maze(m, n, SPARSITY)
-        self.screen = pygame.display.set_mode((WIDTH * (self.maze.cols) , (self.maze.rows) * WIDTH))
-        self.player = Player(self.maze) 
-        self.end_rect = pygame.Rect(1 * WIDTH, 0 * WIDTH, WIDTH, WIDTH)
-                                    
+        self.maze = Maze(self, m, n, (100, 100, 100), self.padding, self.wall_color)
+        self.maze.create_center()
+        self.screen = pygame.display.set_mode((WIDTH * (self.maze.cols) + 18 * PADDING, 2 * PADDING + (self.maze.rows) * WIDTH))
+        self.end_rect = pygame.Rect(1 * WIDTH + PADDING, 1 * WIDTH, WIDTH, WIDTH)
+        self.entities = []
+        for i in range(1):
+            self.entities.append(Entity(self, (PADDING + m * WIDTH // 2, PADDING + n * WIDTH // 2), (0, 255, 0), 20, 1, 2, 100, 1))
+        # self.entities = [Stalker(self.screen, self.maze, (PADDING + m * WIDTH // 2, PADDING + n * WIDTH // 2), (0, 255, 0), 20, 1, 2, 100) for i in range(1)]
+        for i in range(1):
+            self.entities.append(Giant(self, (PADDING + m * WIDTH // 2, PADDING + n * WIDTH // 2), (0, 255, 0), r.randint(60,80), 1, 2, 0, 3))
+        # self.support.append(Gift(self.screen, self.maze, (WIDTH + PADDING, PADDING + WIDTH), (r.randint(0, 255),r.randint(0, 255),r.randint(0, 255)), 90, 1, 2, 0, 1))
+        
+      
+        self.traps = []
+
+        self.player = Player(self) 
+        self.inventory = [20, 5, 5, 5] # bullets,powered,mines,trap-clear
+        self.support = []
+       
+        self.text = ScoreBoard(self)
+        self.score = 0
+        self.state = None
+        self.lives = 100
+        self.muted = -1
+        
         self.running = True
+        self.hasPowerUp = False
+
 
         
 
+    def calc_snakes(self):
+        if self.level % 5 == 0 and self.level > 6:
+            return r.randint(1, self.level)
+        else:
+            return r.randint(self.level // 5, self.level)
+        
+    def calc_cells(self):
+        return r.randint(self.level, self.level * 3 // 2)
+    
+    def calc_giants(self):
+        if self.level % 3 == 0 and self.level > 4:
+            return r.randint(2, self.level)
+        else:
+            return r.randint(self.level // 3, self.level)
+        
+
+    def start_level(self):
+        
+        
+        while self.lives > 0:
+            result = 0
+            temp = self.maze.get_layout()
+            
+            inv = [item for item in self.inventory]
+            temp_score = self.score
+            print("Level", self.level)
+            self.sound.toPlay = []
+            x = self.run()
+            print("returned", x)
+            if x >= 1:
+                self.score += x
+                self.wall_color = (r.randint(0,255),r.randint(0,255),r.randint(0,255))
+                if self.level % 5 == 4:
+                    
+           
+                    self.maze = CourtYard(self, self.m, self.n, (100, 100, r.randint(0, 35)), self.padding, self.wall_color, self.content[r.randrange(0, len(self.content))])
+                else:
+                    self.maze = Maze(self, self.m, self.n, (r.randint(0, 100), r.randint(0, 100), r.randint(0, 40)), self.padding, self.wall_color)
+                self.maze.create_center()
+                self.level += 1
+                self.inventory = [i + self.level // 2 if i + self.level // 2 < 99 else 99 for i in self.inventory]
+                print(self.inventory)
+                
+            elif x == 0:
+                self.lives -= 1
+                
+                self.maze.layout = temp
+                self.inventory = inv
+                self.score = temp_score
+                
+            elif x == -1:
+                break
+                    
+            self.player=  Player(self)
+            level_settings = self.level_settings[self.level - 1].strip().split(" ") # Entity Builder Stalker Giant Snake
+            self.entities = []  
+            self.support = []
+            
+            # for i in range(1):
+            self.entities += [Entity(self, (self.padding + self.m * WIDTH // 2, self.padding + self.n * WIDTH // 2), (0, 255, 0), 80, 1, 2, 100, 1) for i in range(int(level_settings[0]))]
+            self.entities += [Builder(self, (self.padding + self.m * WIDTH // 2, self.padding + self.n * WIDTH // 2), (0, 255, 0), 80, 1, 2, .15, r.randint(1, 2)) for i in range(int(level_settings[1]))]
+            # self.entities += [Entity(self.screen, self.maze, (self.padding + self.m * WIDTH // 2, self.padding + self.n * WIDTH // 2), (0, 255, 0), 80, 1, 2, 0, 1) for i in range(15)]
+           
+            self.entities += [Giant(self, (self.padding + self.m * WIDTH // 2, self.padding + self.n * WIDTH // 2), (0, 255, 0), r.randint(60, 80), 1, 2, 0, r.randint(3,4)) for i in range(int(level_settings[3]))]
+            self.entities += [Stalker(self, (self.padding + self.m * WIDTH // 2, self.padding + self.n * WIDTH // 2), (0, 255, 0), 30, 1, 2, r.randint(2, 3)) for i in range(int(level_settings[2]))]
+        
+            self.entities += [Snake(self, (0, 255, 0), (self.padding + self.m * WIDTH // 2, self.padding + self.n * WIDTH // 2), "unravel", 1, 100, 8) for i in range(int(level_settings[4]))]
+            self.traps = []
+          
+  
+        pygame.quit()
+            
+                
+                
     def run(self):
-        
+        self.running = True
+        self.hasPowerUp = False
         while self.running:
     
             self.clock.tick(60)
-    
+            if self.state == "paused":
+                for entity in self.entities:
+                    entity.render()
+                self.player.render()
+
+                self.text.render()
+                pygame.display.flip()
+                for e in pygame.event.get():
+                    if e.type == pygame.KEYDOWN:
+                        if e.key == pygame.K_p:
+                            self.state = None
+                        elif e.key == pygame.K_ESCAPE:
+                            return -1
+                        elif e.key == pygame.K_m:
+                            self.muted *= -1
+                continue
+
+            if self.player.hp <= 0:
+                # pygame.mixer.music.load("death.mp3")
+                # pygame.mixer.music.play()
+                print("DIED")
+                return 0
+            
             for e in pygame.event.get():
                 if e.type == pygame.QUIT:
                     self.running = False
                 
                 if e.type == pygame.KEYDOWN:
-                    if e.key == pygame.K_ESCAPE:
-                        self.running = False
+                    if e.key == pygame.K_p:
+                            self.state = "paused"
+                    elif e.key == pygame.K_ESCAPE:
+                        return -1
+                    # elif e.key == pygame.K_t:
+                    #     self.player.trace(self.maze.layout, 0, 1)
+                    elif e.key == pygame.K_1 and self.inventory[0] > 0:
+                        self.player.shoot("alive")
+                    #     self.sound.player_shoot()
+                    elif e.key == pygame.K_2 and self.inventory[1] > 0:
+                        self.player.shoot("powered")
+                    #     self.sound.player_shoot()
+                    elif e.key == pygame.K_3 and self.inventory[2] > 0:
+                        self.player.lay_mine(self.player.rect.x, self.player.rect.y, 5)
+                    # elif e.key == pygame.K_c:
+                    #     self.maze.change_color()
+                    elif e.key == pygame.K_4 and self.inventory[3] > 0:
+                        self.player.clear_traps(15)
+                    #     self.sound.load_sound("boom.mp3")
+                    elif e.key == pygame.K_l:
+                        return 100
+                    elif e.key == pygame.K_0:
+                        self.support.append(Gift(self, (WIDTH + self.padding, self.padding + WIDTH), (255, 255, 0), 75, 1, 4, 0, 1))
+                        print("And 1")
+                    # elif e.key == pygame.K_9:
+                    #     self.player.incHits()
+                    # elif e.key == pygame.K_5:
+                    #     self.player.summon(self.player.rect.x, self.player.rect.y)
+                    #     self.score -= 400
+                    elif e.key == pygame.K_m:
+                        self.muted *= -1
+                    # elif e.key == pygame.K_a:
+                    #     self.player.move_single_axis(-WIDTH, 0)
+                    # elif e.key == pygame.K_s:
+                    #     self.player.bullets.append(Shield(self.screen, self.maze))
+                        
+                    elif e.key == pygame.K_x:
+                        print(self.DELETE_LATER)
+                        with open("f.txt", "a") as f:
+                            f.write(str(self.DELETE_LATER) + "\n")
+           
 
-
-                    if e.key == pygame.K_SPACE:
                       
-                        self.player.trace(self.maze.layout)
-
-                    
-                    if e.key == pygame.K_c:
-                        self.player.change_color()
     
         # Move the player if an arrow key is pressed
 
             key = pygame.key.get_pressed()
             if key[pygame.K_LEFT]:
-                self.player.move(-2, 0)
+                self.player.move_single_axis(-1, 0)
+                self.player.direction = "west"
             if key[pygame.K_RIGHT]:
-                self.player.move(2, 0)
+                self.player.move_single_axis(1, 0)
+                self.player.direction = "east"
             if key[pygame.K_UP]:
-                self.player.move(0, -2)
+                self.player.move_single_axis(0, -1)
+                self.player.direction = "south"
             if key[pygame.K_DOWN]:
-                self.player.move(0, 2)
+                self.player.move_single_axis(0, 1)
+                self.player.direction = "north"
+                
+            
         
             if self.player.rect.colliderect(self.end_rect):
                 self.running = False
-                break
+                # pygame.mixer.music.load("complete.mp3")
+                # pygame.mixer.music.play()
+                return 4 * self.player.hp
+                
     
-            self.screen.fill(FILL_COLOR)
+            self.screen.fill(self.fill_color)
+     
+             
+            self.player.doSomething()
             
-            pygame.draw.rect(self.screen, (255, 0, 0), self.end_rect)
-            self.maze.render(self.screen)
-            pygame.draw.rect(self.screen, self.player.color, self.player.rect)
-            pygame.display.flip()
+            for support in self.support:
+                if support.hp <= 0 or support.state == "dead":
+                    self.support.remove(support)    
+                else:    
+                    support.doSomething()
+            
+            for entity in self.entities:
+                if entity.state == "dead":
+                 
+                    self.score += entity.scale
+                    self.entities.remove(entity)
+                else:
+                    entity.doSomething()
+                    
         
+            self.maze.doSomething()    
+            for trap in self.traps:
+                if trap.state == "dead" or trap.hp == 0:
+                   self.traps.remove(trap)
+             
+            self.text.render()
+           
+            
+           
+           
+            if self.player.hp < 13:
+                for support in self.support:
+                    if type(support) == Gift:
+                        break
+                else:
+                    self.support.append(Gift(self, (WIDTH + self.padding, self.padding + WIDTH), (255, 255, 0), 80, 1, 4, 0, 1))
+                    print("GIFT!")
+                    
+            if r.randint(0, 1000) < 10 and False == self.hasPowerUp and self.player.power_tick <= 0 and r.randint(0, 100) < 10:
+                self.support.append(PowerUp(self))
+                print("ANd 1")
+                self.hasPowerUp = True
+            #     self.sound.load_sound("power.mp3")
+                    
+                
+            pygame.display.flip()
+            if self.muted < 0:
+                self.sound.play_sounds()
 
 
-game = GameState(m * 6, 6 * n, WIDTH, 100, (50, 10), WALL_COLOR, FILL_COLOR)
-game.run()
 
-
+game = GameState(36, 36, 16, 10, (100, 100), (0,0,0))
+game.start_level()
