@@ -1,7 +1,8 @@
 
-import math
 import pygame
-import random as r
+from math import ceil, floor, sqrt
+from random import choice as r_choice, randint as r_int
+
 
 
 WIDTH = 16
@@ -112,9 +113,9 @@ class Maze(object):
         
         
         
-        self.s = [(1, 1), (math.floor(self.cols / 2), 1), (self.cols - 2, self.rows - 2), (math.floor(self.cols / 2), self.rows - 2),
-         (self.cols - 2 , math.floor(self.rows / 2)), (1, math.floor(self.rows / 2)), (1, self.rows - 2), (self.cols - 2, 1),
-        (math.floor(self.cols / 2), self.rows - 2)]
+        self.s = [(1, 1), (floor(self.cols / 2), 1), (self.cols - 2, self.rows - 2), (floor(self.cols / 2), self.rows - 2),
+         (self.cols - 2 , floor(self.rows / 2)), (1, floor(self.rows / 2)), (1, self.rows - 2), (self.cols - 2, 1),
+        (floor(self.cols / 2), self.rows - 2)]
         for i in self.s:
             self.layout[i[0]][i[1]][0].color = (255, 0, 0)
             self.layout[i[0]][i[1]][0].die()
@@ -141,49 +142,51 @@ class Maze(object):
                       
 
         copy[1][1][0].color = (255,0,0)
-        print(copy[1][1][0].color, "color")
                 
         return copy
 
 
     def combine(self, layout, other, sparsity):
-        print(sparsity, "Sparsity")
+
         color_ = ((self.layout[0][0][0].color[0]) // 2, (+ self.layout[0][0][0].color[1]) // 2, (self.layout[0][0][0].color[2]) // 2)
         if 6 <= self.game.level % 8 <= 8:
-            explosive_ = r.randint(10, 40)
+            explosive_ = r_int(10, 40)
         else:
             explosive_ = 200
 
         if 1 == self.game.level % 2:
-            glass_ = r.randint(1, 30)
+            glass_ = r_int(1, 30)
+        elif 13 == self.game.level % 15 or 19 == self.game.level % 20:
+            glass_ = r_int(80, 100)
+
         else:
             glass_ = sparsity[2]
         for y in range(1, len(layout) - 1):
             for x in range(1, len(layout[y]) - 1):
                 
                    
-                if layout[y][x][0].state != "alive" or "alive" != other[y][x][0].state and r.randint(0, 100) < sparsity[0]:
+                if layout[y][x][0].state != "alive" or "alive" != other[y][x][0].state and r_int(0, 100) < sparsity[0]:
                     layout[y][x][0].die()
-                elif r.randint(0, 100) < glass_:
+                elif r_int(0, 100) < glass_:
                     layout[y][x][0] = Breakable_Wall(self.game, layout[y][x][0].pos, color_)
                     
 
-                if  r.randint(0, 100 ) < sparsity[1] and x != 0 and x != len(self.layout[0]) - 1 and y != 0 and y != len(self.layout) - 1 and x % 2 == 0 and y % 2 == 0:
+                if  r_int(0, 100 ) < sparsity[1] and x != 0 and x != len(self.layout[0]) - 1 and y != 0 and y != len(self.layout) - 1 and x % 2 == 0 and y % 2 == 0:
                     layout[y][x][0].die()
-                elif r.randint(0, explosive_) < 10 and x % 2 == 0 and y % 2 == 0:
+                elif r_int(0, explosive_) < 10 and x % 2 == 0 and y % 2 == 0:
                     layout[y][x][0] = Explosive_Wall(self.game, self.layout[y][x][0].pos, (255, 0, 0))
                     
         
                 
 
     def create_center(self):
-        x = math.ceil(self.cols / 2)
-        y = math.ceil(self.rows / 2)
-        r = int(min(math.sqrt(self.rows), math.sqrt(self.cols)))
+        x = ceil(self.cols / 2)
+        y = ceil(self.rows / 2)
+        r = int(min(sqrt(self.rows), sqrt(self.cols)))
         if r % 2 == 0:
             r += 1
-        for j in range(-math.floor(r / 2) - 1 , math.floor(r / 2)):
-            for i in range(-math.floor(r / 2) - 1, math.floor(r / 2)):
+        for j in range(-floor(r / 2) - 1 , floor(r / 2)):
+            for i in range(-floor(r / 2) - 1, floor(r / 2)):
                 
                 self.layout[y + j][x + i][0].die()
         
@@ -211,7 +214,7 @@ class Maze(object):
                 visited.add(toVisit.pop())
                 
             else:
-                c1, c2 = r.choice(choices)
+                c1, c2 = r_choice(choices)
                 toVisit.append(c1)
                 layout[c2[1] ][c2[0]][0].die()
                
@@ -219,7 +222,7 @@ class Maze(object):
                 
 
     def change_color(self):
-        color = (r.randint(0, 255), r.randint(0, 255), r.randint(0, 255))
+        color = (r_int(0, 255), r_int(0, 255), r_int(0, 255))
         self.game.wall_color = color
      
         for row in self.layout:
@@ -261,8 +264,6 @@ class CourtYard(Maze):
         self.settings[1] = (int(self.settings[2].strip("()")), int(self.settings[3].strip("()")))
         sparsity = (int(self.settings[4].strip("()")), int(self.settings[5].strip("()")), sparsity[2])
     
-
-        print("settings", self.settings)
         self.layout_idx = 0
       
         super(CourtYard, self).__init__(game, row, col, sparsity, padding, WALL_COLOR)
@@ -271,21 +272,6 @@ class CourtYard(Maze):
         
 
     def carve(self, x):
-        # width = r.randint(1, self.cols // 6)
-        # spacing = r.randint(2, self.cols // 4)
-        
-        
-        # while spacing <= width:
-        #     spacing += 2
-        
-        # # the width will be spacing - width, spacing must be > width, width should be odd?
-        # print(width, spacing, self.sparsity)
-      
-        # if len(game.DELETE_LATER) != 1:
-        #     game.DELETE_LATER = [(width, spacing)]
-        # else:
-        #     game.DELETE_LATER.append((width, spacing))
-        #     game.DELETE_LATER.append(self.sparsity)
         width = self.settings[self.layout_idx][0]
         spacing = self.settings[self.layout_idx][1]
         self.layout_idx += 1
