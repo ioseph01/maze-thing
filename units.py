@@ -1,7 +1,7 @@
 from structures import Breakable_Wall, Explosive_Wall, Mine, Wall
-import random as r
+from random import choice as r_choice, randint as r_int
 import pygame
-import math
+from math import ceil, floor, sqrt
 
 
 WIDTH = 16
@@ -41,7 +41,7 @@ class Unit(object):
 class Entity(Unit):
     
     def __init__(self, game, coords, color, trace_commitment, scale, step, build_rate, hp):
-        super(Entity, self).__init__(game, color, coords, "alive", r.choice(["north", "east", "south", "west"]), scale, step, hp)
+        super(Entity, self).__init__(game, color, coords, "alive", r_choice(["north", "east", "south", "west"]), scale, step, hp)
         self.path = []
         self.trace_commitment = trace_commitment / 100
         self.target = (self.game.maze.rows, self.game.maze.cols)
@@ -51,9 +51,9 @@ class Entity(Unit):
         
 
     def get_scatter(self):
-        return r.choice( [(1, 1), (math.ceil(self.game.maze.cols / 2), 1), (self.game.maze.cols - 2, self.game.maze.rows - 2), (math.ceil(self.game.maze.cols / 2), self.game.maze.rows - 2),
-         (self.game.maze.cols - 2 , math.ceil(self.game.maze.rows / 2)), (1, math.ceil(self.game.maze.rows / 2)), (1, self.game.maze.rows - 2), (self.game.maze.cols - 2, 1),
-        (math.ceil(self.game.maze.cols / 2), self.game.maze.rows - 2)] )
+        return r_choice( [(1, 1), (ceil(self.game.maze.cols / 2), 1), (self.game.maze.cols - 2, self.game.maze.rows - 2), (ceil(self.game.maze.cols / 2), self.game.maze.rows - 2),
+         (self.game.maze.cols - 2 , ceil(self.game.maze.rows / 2)), (1, ceil(self.game.maze.rows / 2)), (1, self.game.maze.rows - 2), (self.game.maze.cols - 2, 1),
+        (ceil(self.game.maze.cols / 2), self.game.maze.rows - 2)] )
     
 
     def move_single_axis(self, dx, dy):
@@ -84,7 +84,6 @@ class Entity(Unit):
 
     def playerDetect(self):
         if self.rect.colliderect(self.game.player.rect):
-            print("HIT!!!!!!!")
             # self.game.sound.player_hurt()
             self.game.player.hp -= 1
                         
@@ -101,7 +100,6 @@ class Entity(Unit):
     def bulletDetect(self):
         for bullet in self.game.player.bullets:
             if self.rect.colliderect(bullet.rect):
-                print("SHOT!!!!")
                 self.state = "dead"
                 bullet.hp -= 1
                 # self.game.sound.load_sound("shot2.mp3")
@@ -109,7 +107,7 @@ class Entity(Unit):
 
                 
     def lay_trap(self):
-            if r.randint(1, 1000) < self.build_rate and self.trace_tick == 0 and len(self.game.maze.layout[self.rect.y // WIDTH][self.rect.x // WIDTH]) < 2:
+            if r_int(1, 1000) < self.build_rate and self.trace_tick == 0 and len(self.game.maze.layout[self.rect.y // WIDTH][self.rect.x // WIDTH]) < 2:
                 self.game.traps.append(Mine(self.game, self.pos, self.game.maze.layout[0][0][0].color, 1))
                 self.game.maze.layout[self.rect.y // WIDTH][self.rect.x // WIDTH].append(self.game.traps[-1])
 
@@ -182,9 +180,7 @@ class Entity(Unit):
                 try:
                     self.target = (current[-1][0], current[-1][1])
                 except IndexError:
-                    print("size of current is ", len(current))
-                    print("this error occurs when a player is hit by an entity, should be ok")
-                    exit()
+                    print(f"Virus upload progress .......... {r_int(0, 100)}%")
                     
                 return
             
@@ -236,7 +232,6 @@ class Giant(Entity):
             
             if self.rect.colliderect(bullet.rect):
                 bullet.hp -= 1
-                print("Giant SHOT!!!!")
                 self.step *= 7/5
                 self.hp -= 1
                 self.scale += 1
@@ -304,7 +299,6 @@ class Stalker(Entity):
         
     def playerDetect(self):
         if self.rect.colliderect(self.game.player.rect):
-            print("HIT!!!!!!!")
             self.game.player.hp -= 1
    
     def bulletDetect(self):
@@ -325,14 +319,13 @@ class Stalker(Entity):
             if abs(self.rect.x - self.game.player.rect.x) < 120 and abs(self.rect.y - self.game.player.rect.y) < 120 and self.hide_tick == 0 and self.game.player.state == "alive":
                 if self.state != "hiding":
                     m = self.game.maze.layout[0][0][0].color
-                    self.color = r.choice( (( m[0] // 2, m[1] // 2, m[2] // 2), self.game.wall_color))
+                    self.color = r_choice( (( m[0] // 2, m[1] // 2, m[2] // 2), self.game.wall_color))
                     self.state = "hiding"
                 else:
                     self.bulletDetect()
                     self.render()
                     self.hide_tick = self.hide_tick - 1 if self.hide_tick > 0 else 0
                     if self.rect.colliderect(self.game.player.rect):
-                        print("HIT!!!!!!!")
                         # self.game.sound.toPlay.insert(1, "found.mp3")
                         self.game.player.hp -= 1
                         self.color = (0,255,0)
@@ -375,7 +368,7 @@ class Snake(Unit):
         if type(segments) == list:
             self.segments = segments
         elif type(segments) == int:
-            self.segments = [Entity(game, self.pos, self.color, r.randint(60, 90), self.scale, self.step, 0, 1) for i in range(segments)]
+            self.segments = [Entity(game, self.pos, self.color, r_int(60, 90), self.scale, self.step, 0, 1) for i in range(segments)]
        
             
 
@@ -430,7 +423,6 @@ class Snake(Unit):
                    
                     self.segments[i].rect.x, self.segments[i].rect.y = coords
                     if self.segments[i].rect.colliderect(self.game.player.rect):
-                        print("Hit!!!!!!!")
                         # self.game.sound.player_hurt()
                         self.game.player.hp -= 1
 
@@ -559,7 +551,6 @@ class Player(Unit):
         x,y = self.rect.x // WIDTH, self.rect.y // WIDTH
         visited = set((x, y))
         toVisit = [[(x, y)]]
-        print("FINDING")
         while len(toVisit) > 0:
             
             current = toVisit.pop(0)
@@ -581,8 +572,7 @@ class Player(Unit):
                 toVisit.append(current + [(x - 1, y)])
             if temp == len(toVisit):
                 self.paths.append(current)
-         
-        # print(self.paths)
+
         
             
     def explode(self, coords):
@@ -637,7 +627,6 @@ class Player(Unit):
                     # self.game.sound.load_sound("stuck.mp3")
                     self.stun_tick += 20
                     trap.hp -= 1
-                    print(trap.hp)
                             
 
         if self.power_tick > 0:
@@ -653,7 +642,6 @@ class Player(Unit):
         self.render()
 
         if self.stun_tick > 0:
-            print(self.stun_tick)
             self.stun_tick -= 1
             
         if self.fire_tick > 0:
@@ -714,7 +702,6 @@ class Player(Unit):
 class Summon(Entity):
 
     def __init__(self, game, coords, color, trace_commitment, scale, step, hp, target):
-        print(target, "target")
         super(Summon, self).__init__(game, coords, color, trace_commitment, scale, step, 0, hp)
         self.trace(target[0], target[1])
         self.death_sound = "powered_bullet_death.mp3"
@@ -767,17 +754,6 @@ class Explosion(Unit):
         super(Explosion, self).__init__(game, color, (coords[0] - WIDTH * a, coords[1] - WIDTH * a), "powered", None, scale, 0, hp)
      
 
-        # for trap in game.traps:
-        #     if trap.rect.colliderect(self.rect):
-        #         trap.hp = 0
-                
-        # print("POS : ", self.pos)
-        # for row in self.game.maze.layout:
-        #     for col in row:
-        #         if col[0].rect.colliderect(self.rect):
-        #             print((col[0].rect.x - self.game.padding) / WIDTH, (col[0].rect.y - self.game.padding) / WIDTH)
-        #             col[0].die()
-        print("")
         x,y = (self.rect.x - 10) // WIDTH, (self.rect.y - 10) // WIDTH
         for i in range(self.scale):
             for j in range(self.scale):
@@ -812,14 +788,13 @@ class Gift(Entity):
             if self.game.inventory[i] >= 15:
                 self.game.inventory[i] = self.game.inventory[i] + 1 if self.game.inventory[i] + 1 < 99 else 99
             else:
-                self.game.inventory[i] = self.game.inventory[i] + 5 if self.game.inventory[i] + 5 < 99 else 99
+                self.game.inventory[i] = self.game.inventory[i] + 3 if self.game.inventory[i] + 3 < 99 else 99
             
         self.game.player.hp += 5
             
     
     def playerDetect(self):
         if self.rect.colliderect(self.game.player.rect):
-            print("HIT!!!!!!!")
             self.reward()
             self.state = "dead"
             # self.game.sound.load_sound("shot.mp3")
@@ -857,7 +832,7 @@ class PowerUp(Unit):
     def reward(self):
         # self.game.sound.load_sound("complete.mp3")
         self.game.player.hp += 10
-        r.choice((self.shield, self.ghost, self.strike))()
+        r_choice((self.shield, self.ghost, self.strike))()
    
         
     def shield(self):
@@ -879,18 +854,18 @@ class PowerUp(Unit):
          
             
             for i in range(5):
-                choice = r.choice(self.game.entities)
+                choice = r_choice(self.game.entities)
                 self.game.player.summon(choice.rect.x, choice.rect.y)
                 self.game.player.fire_tick = 0
         self.game.player.power_tick = 400
         
-        x = math.ceil(self.game.maze.cols / 2)
-        y = math.ceil(self.game.maze.rows / 2)
-        radius = int(min(math.sqrt(self.game.maze.rows), math.sqrt(self.game.maze.cols)))
+        x = ceil(self.game.maze.cols / 2)
+        y = ceil(self.game.maze.rows / 2)
+        radius = int(min(sqrt(self.game.maze.rows), sqrt(self.game.maze.cols)))
         if radius % 2 == 0:
             radius += 1
-        for j in range(-math.floor(radius / 2) - 1 , math.floor(radius / 2)):
-            for i in range(-math.floor(radius / 2) - 1, math.floor(radius / 2)):
+        for j in range(-floor(radius / 2) - 1 , floor(radius / 2)):
+            for i in range(-floor(radius / 2) - 1, floor(radius / 2)):
                 self.game.player.mines.append(Mine(self.game, ((y + j) * WIDTH + self.game.padding, (x + i) * WIDTH + self.game.padding), (0, 0, 0), 2))
                
         
