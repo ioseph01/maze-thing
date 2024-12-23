@@ -3,14 +3,20 @@ from units import *
 from structures import *
 
 import os
-import random as r
+from math import ceil
+from random import randint as r_int, randrange as r_range
 
 WIDTH = 16
 
 
-
-
-
+def speed():
+    x = r_int(0, 1000)
+    if x < 5:
+        return 8
+    elif x < 10:
+        return 4
+    return 2
+    
 
 class SoundControl:
     
@@ -25,7 +31,6 @@ class SoundControl:
         if self.play_tick == 0:
             sounds = self.toPlay
             for s in sounds:
-                print(s)
                 if s == "boom.mp3":
                     pygame.mixer.music.load(s)
                     pygame.mixer.music.play()
@@ -39,67 +44,36 @@ class SoundControl:
     def load_sound(self, file):
         if file not in self.toPlay:
             self.toPlay.append(file)
-        
 
-    def player_death(self):
-        self.load_sound("oof.mp3")
-        
-
-    def enemy_death(self):
-        self.load_sound("hit.mp3")
-        
-
-    def player_shoot(self):
-        self.load_sound("quack.mp3")
-        
-
-    def player_hurt(self):
-        self.load_sound("damage.mp3")
 
 
 class ScoreBoard:
     
     def __init__(self, game):
-        self.screen = game.screen
-        self.font = pygame.font.Font("PressStart2P-Regular.ttf", 15)
+        self.font = pygame.font.Font("PressStart2P-Regular.ttf", 13)
         self.game = game
         
         
+    def text_line(self, text, x, y):
+        line = self.font.render(text, True, (255,255,255))
+        self.game.screen.blit(line, (x, y))
         
     def render(self):
-        score = self.font.render(f"{int(self.game.score)}", True, (255,255,255))
-        self.screen.blit(score, (WIDTH * (self.game.maze.cols) + self.game.padding * 2, 20))
-        
-        health = self.font.render(f"{int(4 * self.game.player.hp) }%", True, (255,255,255))
-        self.screen.blit(health, (WIDTH * (self.game.maze.cols) + self.game.padding * 11, 20))
-        
-        invMap = [self.ammo1, self.ammo2, self.mine, self.area_clear]
+        self.text_line(f"lvl:{self.game.level}", WIDTH * (self.game.maze.cols) + self.game.padding * 1.5, 20) # lvl
+        score = str(int(self.game.score))
+        while len(score) < 5:
+            score = "0" + score
+        self.text_line(score, WIDTH * (self.game.maze.cols) + self.game.padding * 10, 20) # score
 
-        for item in range(len(self.game.inventory)):
-            text = str(self.game.inventory[item])
-            if self.game.inventory[item] < 10:
-                text = "0" + text
-            invMap[item](text)
-            
-            
+        self.text_line(f"\u2665:{str(self.game.lives)}", WIDTH * (self.game.maze.cols) + self.game.padding * 1.5, 70) # lives
+        self.text_line(f"{int(self.game.player.hp * 4)}%", WIDTH * (self.game.maze.cols) + self.game.padding * 10, 70) # hp
         
-
-    def ammo1(self, text):
-        ammo1 = self.font.render(f"O:{text}", True, (255,255,255))
-        self.screen.blit(ammo1, (WIDTH * (self.game.maze.cols) + self.game.padding * 2, 70))
         
-    def ammo2(self, text):
-        ammo2 = self.font.render(f"*:{text}", True, (255,255,255))
-        self.screen.blit(ammo2, (WIDTH * (self.game.maze.cols) + self.game.padding * 11, 70))
+        self.text_line(f"[1]:{self.game.inventory[0]}", WIDTH * (self.game.maze.cols) + self.game.padding * 1.5, 120) # bullet1
+        self.text_line(f"[2]:{self.game.inventory[1]}", WIDTH * (self.game.maze.cols) + self.game.padding * 1.5, 170) # bullet2
+        self.text_line(f"[3]:{self.game.inventory[2]}", WIDTH * (self.game.maze.cols) + self.game.padding * 1.5, 220) # bullet2
+        self.text_line(f"[4]:{self.game.inventory[3]}", WIDTH * (self.game.maze.cols) + self.game.padding * 1.5, 270) # bullet2
         
-    def mine(self, text):
-        mine = self.font.render(f"#:{text}", True, (255,255,255))
-        self.screen.blit(mine, (WIDTH * (self.game.maze.cols) + self.game.padding * 2, 120))
-                
-    def area_clear(self, text):
-        clear = self.font.render(f"@:{text}", True, (255,255,255))
-        self.screen.blit(clear, (WIDTH * (self.game.maze.cols) + self.game.padding * 11, 120))
-
 
 
 class GameState:
@@ -123,26 +97,19 @@ class GameState:
         self.width = WIDTH
         self.sparsity = SPARSITY
         self.padding = PADDING
-        self.wall_color = (r.randint(0,255),r.randint(0,255),r.randint(0,255))
+        self.wall_color = (r_int(0,255),r_int(0,255),r_int(0,255))
         self.fill_color = Fill_color
 
-        self.maze = Maze(self, m, n, (100, 100, 100), self.padding, self.wall_color)
+        self.maze = Maze(self, m, n, (0, 0, 100), self.padding, self.wall_color)
         self.maze.create_center()
         self.screen = pygame.display.set_mode((WIDTH * (self.maze.cols) + 18 * PADDING, 2 * PADDING + (self.maze.rows) * WIDTH))
         self.end_rect = pygame.Rect(1 * WIDTH + PADDING, 1 * WIDTH, WIDTH, WIDTH)
-        self.entities = []
-        for i in range(1):
-            self.entities.append(Entity(self, (PADDING + m * WIDTH // 2, PADDING + n * WIDTH // 2), (0, 255, 0), 20, 1, 2, 100, 1))
-        # self.entities = [Stalker(self.screen, self.maze, (PADDING + m * WIDTH // 2, PADDING + n * WIDTH // 2), (0, 255, 0), 20, 1, 2, 100) for i in range(1)]
-        for i in range(1):
-            self.entities.append(Giant(self, (PADDING + m * WIDTH // 2, PADDING + n * WIDTH // 2), (0, 255, 0), r.randint(60,80), 1, 2, 0, 3))
-        # self.support.append(Gift(self.screen, self.maze, (WIDTH + PADDING, PADDING + WIDTH), (r.randint(0, 255),r.randint(0, 255),r.randint(0, 255)), 90, 1, 2, 0, 1))
-        
-      
+        self.entities = [Snake(self, (0,255,0), (self.padding + self.m * WIDTH // 2, self.padding + self.n * WIDTH // 2), "alive", 1, 200, 16)]
+
         self.traps = []
 
         self.player = Player(self) 
-        self.inventory = [20, 5, 5, 5] # bullets,powered,mines,trap-clear
+        self.inventory = [10, 5, 5, 1] # bullets,powered,mines,trap-clear
         self.support = []
        
         self.text = ScoreBoard(self)
@@ -155,23 +122,6 @@ class GameState:
         self.hasPowerUp = False
 
 
-        
-
-    def calc_snakes(self):
-        if self.level % 5 == 0 and self.level > 6:
-            return r.randint(1, self.level)
-        else:
-            return r.randint(self.level // 5, self.level)
-        
-    def calc_cells(self):
-        return r.randint(self.level, self.level * 3 // 2)
-    
-    def calc_giants(self):
-        if self.level % 3 == 0 and self.level > 4:
-            return r.randint(2, self.level)
-        else:
-            return r.randint(self.level // 3, self.level)
-        
 
     def start_level(self):
         
@@ -182,23 +132,23 @@ class GameState:
             
             inv = [item for item in self.inventory]
             temp_score = self.score
-            print("Level", self.level)
             self.sound.toPlay = []
             x = self.run()
-            print("returned", x)
             if x >= 1:
-                self.score += x
-                self.wall_color = (r.randint(0,255),r.randint(0,255),r.randint(0,255))
+                self.score += x * ceil(self.level / 100)
+                self.wall_color = (r_int(0,255),r_int(0,255),r_int(0,255))
                 if self.level % 5 == 4:
                     
            
-                    self.maze = CourtYard(self, self.m, self.n, (100, 100, r.randint(0, 35)), self.padding, self.wall_color, self.content[r.randrange(0, len(self.content))])
+                    self.maze = CourtYard(self, self.m, self.n, (100, 100, r_int(0, 35)), self.padding, self.wall_color, self.content[r_range(0, len(self.content))])
                 else:
-                    self.maze = Maze(self, self.m, self.n, (r.randint(0, 100), r.randint(0, 100), r.randint(0, 40)), self.padding, self.wall_color)
+                    self.maze = Maze(self, self.m, self.n, (r_int(0, 100), r_int(0, 100), r_int(0, 40)), self.padding, self.wall_color)
                 self.maze.create_center()
                 self.level += 1
-                self.inventory = [i + self.level // 2 if i + self.level // 2 < 99 else 99 for i in self.inventory]
-                print(self.inventory)
+                self.inventory = [1 + i if 1 + i < 99 else 99 for i in self.inventory]
+                if self.level % 2 == 0:
+                    self.inventory[1] -= 1
+                    self.inventory[3] -= 1
                 
             elif x == 0:
                 self.lives -= 1
@@ -211,19 +161,25 @@ class GameState:
                 break
                     
             self.player=  Player(self)
-            level_settings = self.level_settings[self.level - 1].strip().split(" ") # Entity Builder Stalker Giant Snake
+            try:
+                level_settings = self.level_settings[self.level - 1].strip().split(" ") # Entity Builder Stalker Giant Snake
+            except IndexError:
+                level_settings = [r_int(10, self.level // 2) for i in range(5)]
+                
             self.entities = []  
             self.support = []
             
             # for i in range(1):
-            self.entities += [Entity(self, (self.padding + self.m * WIDTH // 2, self.padding + self.n * WIDTH // 2), (0, 255, 0), 80, 1, 2, 100, 1) for i in range(int(level_settings[0]))]
-            self.entities += [Builder(self, (self.padding + self.m * WIDTH // 2, self.padding + self.n * WIDTH // 2), (0, 255, 0), 80, 1, 2, .15, r.randint(1, 2)) for i in range(int(level_settings[1]))]
+            self.entities += [Entity(self, (self.padding + self.m * WIDTH // 2, self.padding + self.n * WIDTH // 2), (0, 255, 0), 75, 1, speed(), 100, 1) for i in range(int(level_settings[0]))]
+            self.entities += [Builder(self, (self.padding + self.m * WIDTH // 2, self.padding + self.n * WIDTH // 2), (0, 255, 0), 80, 1, speed(), .15, r_int(1, 2)) for i in range(int(level_settings[1]))]
             # self.entities += [Entity(self.screen, self.maze, (self.padding + self.m * WIDTH // 2, self.padding + self.n * WIDTH // 2), (0, 255, 0), 80, 1, 2, 0, 1) for i in range(15)]
            
-            self.entities += [Giant(self, (self.padding + self.m * WIDTH // 2, self.padding + self.n * WIDTH // 2), (0, 255, 0), r.randint(60, 80), 1, 2, 0, r.randint(3,4)) for i in range(int(level_settings[3]))]
-            self.entities += [Stalker(self, (self.padding + self.m * WIDTH // 2, self.padding + self.n * WIDTH // 2), (0, 255, 0), 30, 1, 2, r.randint(2, 3)) for i in range(int(level_settings[2]))]
-        
-            self.entities += [Snake(self, (0, 255, 0), (self.padding + self.m * WIDTH // 2, self.padding + self.n * WIDTH // 2), "unravel", 1, 100, 8) for i in range(int(level_settings[4]))]
+            self.entities += [Giant(self, (self.padding + self.m * WIDTH // 2, self.padding + self.n * WIDTH // 2), (0, 255, 0), r_int(60, 80), 1, speed(), 0, r_int(3,4)) for i in range(int(level_settings[3]))]
+            self.entities += [Stalker(self, (self.padding + self.m * WIDTH // 2, self.padding + self.n * WIDTH // 2), (0, 255, 0), r_int(30, 76), 1, speed(), r_int(2, 3)) for i in range(int(level_settings[2]))]
+            try:
+                self.entities += [Snake(self, (0, 255, 0), (self.padding + self.m * WIDTH // 2, self.padding + self.n * WIDTH // 2), "unravel", 1, r_int(1, self.level), 8) for i in range(int(level_settings[4]))]
+            except ValueError:
+                pass
             self.traps = []
           
   
@@ -237,6 +193,7 @@ class GameState:
         while self.running:
     
             self.clock.tick(60)
+        
             if self.state == "paused":
                 for entity in self.entities:
                     entity.render()
@@ -257,7 +214,6 @@ class GameState:
             if self.player.hp <= 0:
                 # pygame.mixer.music.load("death.mp3")
                 # pygame.mixer.music.play()
-                print("DIED")
                 return 0
             
             for e in pygame.event.get():
@@ -269,8 +225,6 @@ class GameState:
                             self.state = "paused"
                     elif e.key == pygame.K_ESCAPE:
                         return -1
-                    # elif e.key == pygame.K_t:
-                    #     self.player.trace(self.maze.layout, 0, 1)
                     elif e.key == pygame.K_1 and self.inventory[0] > 0:
                         self.player.shoot("alive")
                     #     self.sound.player_shoot()
@@ -288,23 +242,9 @@ class GameState:
                         return 100
                     elif e.key == pygame.K_0:
                         self.support.append(Gift(self, (WIDTH + self.padding, self.padding + WIDTH), (255, 255, 0), 75, 1, 4, 0, 1))
-                        print("And 1")
-                    # elif e.key == pygame.K_9:
-                    #     self.player.incHits()
-                    # elif e.key == pygame.K_5:
-                    #     self.player.summon(self.player.rect.x, self.player.rect.y)
-                    #     self.score -= 400
                     elif e.key == pygame.K_m:
                         self.muted *= -1
-                    # elif e.key == pygame.K_a:
-                    #     self.player.move_single_axis(-WIDTH, 0)
-                    # elif e.key == pygame.K_s:
-                    #     self.player.bullets.append(Shield(self.screen, self.maze))
-                        
-                    elif e.key == pygame.K_x:
-                        print(self.DELETE_LATER)
-                        with open("f.txt", "a") as f:
-                            f.write(str(self.DELETE_LATER) + "\n")
+
            
 
                       
@@ -359,26 +299,29 @@ class GameState:
                 if trap.state == "dead" or trap.hp == 0:
                    self.traps.remove(trap)
              
-            self.text.render()
            
             
            
            
             if self.player.hp < 13:
-                for support in self.support:
-                    if type(support) == Gift:
-                        break
-                else:
+                if len(self.support) < 1:
                     self.support.append(Gift(self, (WIDTH + self.padding, self.padding + WIDTH), (255, 255, 0), 80, 1, 4, 0, 1))
-                    print("GIFT!")
                     
-            if r.randint(0, 1000) < 10 and False == self.hasPowerUp and self.player.power_tick <= 0 and r.randint(0, 100) < 10:
+                else:
+                    for support in self.support:
+                        if isinstance(support, Gift):
+                            break
+                    else: 
+                        if self.player.rect.x - 16 > 80 or self.player.rect.y - 16 > 80:
+                            self.support.append(Gift(self, (WIDTH + self.padding, self.padding + WIDTH), (255, 255, 0), 80, 1, 4, 0, 1))
+                        
+                    
+            if r_int(0, 1000) < 10 and False == self.hasPowerUp and self.player.power_tick <= 0 and r_int(0, 100) < 10:
                 self.support.append(PowerUp(self))
-                print("ANd 1")
                 self.hasPowerUp = True
             #     self.sound.load_sound("power.mp3")
                     
-                
+            self.text.render()
             pygame.display.flip()
             if self.muted < 0:
                 self.sound.play_sounds()
