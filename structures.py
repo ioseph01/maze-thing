@@ -152,8 +152,8 @@ class Maze(object):
     def combine(self, layout, other, sparsity):
 
         color_ = ((self.layout[0][0][0].color[0]) // 2, (+ self.layout[0][0][0].color[1]) // 2, (self.layout[0][0][0].color[2]) // 2)
-        if 6 <= self.game.level % 8 <= 8 and self.game.level % 5 != 0:
-            explosive_ = r_int(10, 40)
+        if 6 <= self.game.level % 9 <= 8 and self.game.level % 6 != 5:
+            explosive_ = r_int(10, 30)
         else:
             explosive_ = 200
 
@@ -161,9 +161,9 @@ class Maze(object):
             glass_ = r_int(1, 30)
         elif 7 == self.game.level % 8 or 11 == self.game.level % 12:
             glass_ = r_int(95, 100)
-
         else:
             glass_ = sparsity[2]
+            
         for y in range(1, len(layout) - 1):
             for x in range(1, len(layout[y]) - 1):
                 

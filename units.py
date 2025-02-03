@@ -48,6 +48,7 @@ class Entity(Unit):
         self.trace_tick = 0
         self.tick = 0
         self.build_rate = 1000 * build_rate
+        self.true_color = color
         
 
     def get_scatter(self):
@@ -95,18 +96,22 @@ class Entity(Unit):
                 self.hp -= 1
                 if self.hp <= 0:
                     self.game.sound.load_sound("shot.mp3")
+                    
+                return True
 
     
     
     def bulletDetect(self):
         for bullet in self.game.player.bullets:
             if self.rect.colliderect(bullet.rect):
-                self.state = "dead"
                 bullet.hp -= 1
                 if bullet.state == "powered":
                     self.game.sound.load_sound("shot2.mp3")
+                    self.hp -= max(2, self.hp // 2)
                 else:
                     self.game.sound.load_sound("shot.mp3")
+                    self.hp -= 1
+                return bullet.state
                 
         
 
@@ -133,7 +138,6 @@ class Entity(Unit):
         try:
             self.trace_tick = (self.trace_tick + 1) % (WIDTH // self.step)
         except ZeroDivisionError:
-            print("Handled")
             if self.step >= 20:
                 self.step = 16
             
@@ -165,8 +169,9 @@ class Entity(Unit):
     
 
     def trace(self, target_x, target_y):
-        x = (-self.game.padding + self.rect.x) // WIDTH
-        y = (-self.game.padding + self.rect.y) // WIDTH
+        
+        x = (self.rect.x - self.game.padding) // WIDTH
+        y = (self.rect.y - self.game.padding) // WIDTH
         
         visited = {(x, y)}
         paths = [[(x, y)]]
@@ -190,7 +195,7 @@ class Entity(Unit):
                 try:
                     self.target = (current[-1][0], current[-1][1])
                 except IndexError:
-                    print(f"Virus upload progress .......... {r_int(0, 100)}%")
+                    pass
                     
                 return
             
@@ -199,21 +204,21 @@ class Entity(Unit):
             
             if x + 1 < len(self.game.maze.layout[0]) and (x + 1, y) not in visited:
             
-                if self.game.maze.layout[y][x + 1][0].state == "dead":
+                if self.game.maze.layout[y][x + 1][0].state == "dead" :
                     k = abs(target_x - x - 1) + abs(target_y - y)
                     if k not in toAdd:
                         toAdd[k] = []
                     toAdd[k].append((x + 1, y))
                      
             if y + 1 < len(self.game.maze.layout) and (x, y + 1) not in visited:
-                if self.game.maze.layout[y + 1][x][0].state == "dead":
+                if self.game.maze.layout[y + 1][x][0].state == "dead" :
                     k = abs(target_x - x) + abs(target_y - y - 1)
                     if k not in toAdd:
                         toAdd[k] = []
                     toAdd[k].append((x, y + 1))
                     
             if x - 1 > -1 and (x - 1, y) not in visited:
-                if self.game.maze.layout[y][x - 1][0].state == "dead":
+                if self.game.maze.layout[y][x - 1][0].state == "dead" :
                     k = abs(target_x - x + 1) + abs(target_y - y)
                     if k not in toAdd:
                         toAdd[k] = []
@@ -221,7 +226,7 @@ class Entity(Unit):
                           
             if y - 1 > -1 and (x, y - 1) not in visited:
            
-                if self.game.maze.layout[y - 1][x][0].state == "dead":
+                if self.game.maze.layout[y - 1][x][0].state == "dead" :
                     k = abs(target_x - x) + abs(target_y - y + 1)
                     if k not in toAdd:
                         toAdd[k] = []
@@ -232,6 +237,118 @@ class Entity(Unit):
                     paths.append(current + [val])
             
 
+
+class Chaser(Entity):
+    
+    def __init__(self, game, coords, color, trace_commitment, scale, step, hp):
+        super(Chaser, self).__init__(game, coords, color, trace_commitment, scale, step, 0, hp)
+        self.power_tick = 0
+        
+
+    def trace_(self, target_x, target_y):
+        target_x = (target_x - self.game.padding) // WIDTH
+        target_y = (target_y - self.game.padding) // WIDTH
+       
+        x = (self.rect.x - self.game.padding) // WIDTH
+        y = (self.rect.y - self.game.padding) // WIDTH
+        self.path = [(x,y)]
+        
+        if r_choice((-1,1)) == 1:
+            
+            for i in range(abs(target_y - y)):
+                if target_y > y:
+                    self.path.append((self.path[-1][0], self.path[-1][1] + 1))
+                elif target_y < y:
+                    self.path.append((self.path[-1][0], self.path[-1][1] - 1))
+                
+            for j in range(abs(target_x - x)):
+                if target_x > x:
+                    self.path.append((self.path[-1][0] + 1, self.path[-1][1]))
+                elif target_x < x:
+                    self.path.append((self.path[-1][0] - 1, self.path[-1][1]))
+         
+        else:
+            for j in range(abs(target_x - x)):
+                if target_x > x:
+                    self.path.append((self.path[-1][0] + 1, self.path[-1][1]))
+                elif target_x < x:
+                    self.path.append((self.path[-1][0] - 1, self.path[-1][1]))
+                    
+            for i in range(abs(target_y - y)):
+                if target_y > y:
+                    self.path.append((self.path[-1][0], self.path[-1][1] + 1))
+                elif target_y < y:
+                    self.path.append((self.path[-1][0], self.path[-1][1] - 1))
+                
+            
+
+
+          
+
+
+    def chase(self):
+        x,y = self.game.player.pos
+        if abs(x - self.pos[0]) < 100 and abs(y - self.pos[1]) < 100 and self.power_tick <= 0:
+            self.color = r_choice( (( self.game.wall_color[0] // 2, self.game.wall_color[1] // 2, self.game.wall_color[2] // 2), self.game.wall_color))
+            self.power_tick += r_int(180, 250)
+            self.step = r_choice((2,2,2,2,2,2,2,2,2,2,2,2,4))
+            self.trace_(x, y)
+            
+    def bulletDetect(self):
+        for bullet in self.game.player.bullets:
+            if self.rect.colliderect(bullet.rect) and (self.power_tick <= 100 or isinstance(bullet, Shield)):
+                return super().bulletDetect()          
+
+            
+    def mineDetect(self):
+        if self.power_tick <= 100:
+            super().mineDetect()
+                    
+    def doSomething(self):
+        if self.power_tick > 0:
+            self.power_tick -= 1
+            if 40 <= self.power_tick <= 100 and (self.rect.x - self.game.padding) % WIDTH == 0 and (self.rect.y - self.game.padding) %  WIDTH == 0:
+                self.color = self.true_color
+                self.step = 1
+                
+      
+        if self.trace_tick == 0:
+            self.chase()
+            
+        super().doSomething()
+        
+    
+
+    def move_single_axis(self, dx, dy):
+        if self.power_tick <= 100:
+            return super().move_single_axis(dx, dy)
+            
+        self.rect.x += dx
+        self.rect.y += dy
+        
+  
+        for j in range(self.rect.y // WIDTH - self.scale, self.scale + 1 + self.rect.y // WIDTH):
+            for i in range(self.rect.x // WIDTH - self.scale, self.rect.x // WIDTH + self.scale + 1):
+              
+                if i > -1 and i < (len(self.game.maze.layout[0])) and j < (len(self.game.maze.layout)) and j > -1:
+                    wall = self.game.maze.layout[j][i][0]
+                    if self.rect.colliderect(wall.rect) and wall.state == "alive":
+                        
+                        if i == len(self.game.maze.layout[0]) - 1:
+                            self.rect.right = wall.rect.left
+                      
+                        elif i == 0:
+                            self.rect.left = wall.rect.right
+              
+                        
+                        elif j == len(self.game.maze.layout) - 1:
+                            self.rect.bottom = wall.rect.top
+                       
+                        elif j == 0:
+                            self.rect.top = wall.rect.bottom
+                           
+
+        
 
 
 class Giant(Entity):
@@ -247,6 +364,8 @@ class Giant(Entity):
                 self.scale += 1
                 self.game.sound.load_sound("boom.mp3")
                 self.rect = pygame.Rect(self.pos[0], self.pos[1],  WIDTH * self.scale, WIDTH * self.scale)
+                if bullet.state == "powered":
+                    self.hp -= 1
                 return
                 
 
@@ -318,11 +437,12 @@ class Stalker(Entity):
       
         for bullet in self.game.player.bullets:
             if self.rect.colliderect(bullet.rect):
-                self.hp -= 1
                 bullet.hp -= 1
                 if bullet.state == "powered":
                     self.game.sound.load_sound("shot2.mp3")
+                    self.hp -= max(2, self.hp // 2)
                 else:
+                    self.hp -= 1
                     self.game.sound.load_sound("shot.mp3")
                 return
 
@@ -342,7 +462,7 @@ class Stalker(Entity):
                     if self.rect.colliderect(self.game.player.rect):
                         self.game.sound.toPlay.insert(1, "found.mp3")
                         self.game.player.hp -= 1
-                        self.color = (0,255,0)
+                        self.color = self.true_color
                         self.state = "alive"
                         self.hide_tick = 50
                         self.trace(self.game.player.rect.x, self.game.player.rect.y)
@@ -350,7 +470,7 @@ class Stalker(Entity):
                     
                     
             else:
-                self.color = (0, 255, 0)
+                self.color = self.true_color
                 self.state = "alive"
                 super().doSomething()
                 self.hide_tick = self.hide_tick - 1 if self.hide_tick > 0 else 0
@@ -372,10 +492,9 @@ class Builder(Entity):
 
 class Snake(Unit):
     
-    color = (255,0,0)
 
     def __init__(self, game, color, coords, state, scale, segments, step):
-        super(Snake, self).__init__(game, (255,0,0), coords, state, "north", scale, step, segments)
+        
         self.unravel_counter = 0
       
         self.move_tick = 0
@@ -383,11 +502,18 @@ class Snake(Unit):
 
         if type(segments) == list:
             self.segments = segments
+            super(Snake, self).__init__(game, color, coords, state, "north", scale, step, len(segments))
+            build = r_int(10, 25) * .001 if r_int(0, 100) == 0 else 0
+            self.segments[0].build_rate = build
         elif type(segments) == int:
-            self.segments = [Entity(game, self.pos, self.color, r_int(60, 90), self.scale, self.step, 0, 1) for i in range(segments)]
-       
+            super(Snake, self).__init__(game, color, coords, state, "north", scale, step, segments)
+          
+            build = r_int(10, 25) * .001 if r_int(0, 100) == 0 else 0
+            self.segments = [Entity(game, self.pos, self.color, r_int(60, 90), self.scale, self.step, build, 1) for i in range(segments)]
+            
             
 
+    
     def doSomething(self):
        
         if self.state == "dead":
@@ -400,6 +526,7 @@ class Snake(Unit):
         elif self.state == "dying":
             self.render()
             self.segments.pop(self.destroy_idx)
+            self.hp = len(self.segments)
             self.game.sound.load_sound("shot.mp3")
             self.game.score += 1
             if len(self.segments) <= 2:
@@ -423,6 +550,7 @@ class Snake(Unit):
                 if self.segments[i].state == "dead":
                     self.segments.pop(0)
                     self.game.score += 1
+                    self.hp = len(self.segments)
                     return
                   
                 for bullet in self.game.player.bullets:
@@ -433,14 +561,19 @@ class Snake(Unit):
                         
                 temp = (self.segments[i].rect.x, self.segments[i].rect.y)
                
+                if (self.segments[i].rect.x - self.game.padding) % WIDTH == 0 and (self.segments[i].rect.y - self.game.padding) % WIDTH == 0:
+                    self.segments[i].lay_trap()
                 if i == 0:
                     self.segments[i].doSomething()
+                    
                 else:
                    
                     self.segments[i].rect.x, self.segments[i].rect.y = coords
                     if self.segments[i].rect.colliderect(self.game.player.rect):
                         self.game.sound.load_sound("damage.mp3")
                         self.game.player.hp -= 1
+                        
+                
 
                             
                 coords = temp
@@ -494,10 +627,8 @@ class Bullet(Unit):
             color = (255,255,255)
             self.death_sound = "powered_bullet_death.mp3"
             hp = 3
-        super(Bullet, self).__init__(game, color, coords, state, direction, 1, 2, hp)
+        super(Bullet, self).__init__(game, color, coords, state, direction, 1, (2 if state == "alive" else 4), hp)
 
-       
-        
         
     def directionCoordMap(self, val):
     
@@ -509,9 +640,6 @@ class Bullet(Unit):
             if m[k] == val:
                 return k
         
-
-        
-
     def doSomething(self):
         if self.state != "dead" and self.hp > 0:
             toMove = self.directionCoordMap(self.direction)
@@ -545,7 +673,7 @@ class Bullet(Unit):
 class Player(Unit):
     
     def __init__(self, game):
-        super(Player, self).__init__(game, (255, 200, 0), (game.padding + (game.maze.cols - 2) * WIDTH, game.padding + (game.maze.rows - 2) * WIDTH), "alive", "north", 1, 1.25, 25)
+        super(Player, self).__init__(game, (255, 200, 0), (game.padding + (game.maze.cols - 2) * WIDTH, game.padding + (game.maze.rows - 2) * WIDTH), "alive", "north", 1, 1, 25)
         self.bullets = []
         self.mines = []
         self.stun_tick = 0
@@ -559,6 +687,7 @@ class Player(Unit):
         self.hp -= 1
 
     def clear_traps(self, size):
+                           
         if self.fire_tick != 0:
             return
         
@@ -599,9 +728,11 @@ class Player(Unit):
             self.bullets.append(Bullet(self.game, (self.pos), self.direction, state))
             self.fire_tick = 10
             if state == "powered":
-                self.game.inventory[1] -= 1
+                self.game.inventory[1] -= 1                  
             else:
                 self.game.inventory[0] -= 1
+                
+            
 
 
     def lay_mine(self, x, y, hp):
@@ -619,9 +750,7 @@ class Player(Unit):
         
 
     def doSomething(self):
-     
-        
-                
+                     
         for mine in self.mines:
             if mine.hp <= 0 or mine.state == "dead":
                 self.mines.remove(mine)
@@ -652,7 +781,7 @@ class Player(Unit):
             if self.state == "ghost":
                 self.state = "alive"
                 self.color = (255, 200, 0)
-                self.step = 1.1
+                self.step = 1
         
         self.render()
 
@@ -826,7 +955,7 @@ class Gift(Entity):
                     self.game.sound.load_sound("shot2.mp3")
                 else:
                     self.game.sound.load_sound("shot.mp3")
-                return
+                
             
     def get_scatter(self):
         return (self.game.player.rect.x // WIDTH, self.game.player.rect.y // WIDTH)
